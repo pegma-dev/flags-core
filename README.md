@@ -75,16 +75,17 @@ const detail = await client.evaluate("checkoutEnabled", {
 
 ## Packages
 
-| Package                        | Responsibility                                     |
-| ------------------------------ | -------------------------------------------------- |
-| `@pegma/flags-contracts`       | Context, detail, reasons, provider port            |
-| `@pegma/flags-core`            | Schema, client, cache, timeout, health helper      |
-| `@pegma/flags-static`          | In-memory provider for tests and local development |
-| `@pegma/flags-azure-appconfig` | Azure App Configuration provider                   |
-| `@pegma/flags-aws-appconfig`   | AWS AppConfig provider                             |
-| `@pegma/flags-launchdarkly`    | LaunchDarkly provider                              |
+| Package                            | Responsibility                                     |
+| ---------------------------------- | -------------------------------------------------- |
+| `@pegma/flags-contracts`           | Context, detail, reasons, provider port            |
+| `@pegma/flags-core`                | Schema, client, cache, timeout, health helper      |
+| `@pegma/flags-static`              | In-memory provider for tests and local development |
+| `@pegma/flags-azure-appconfig`     | Azure App Configuration provider                   |
+| `@pegma/flags-aws-appconfig`       | AWS AppConfig provider                             |
+| `@pegma/flags-cloudflare-flagship` | Cloudflare Flagship provider                       |
+| `@pegma/flags-launchdarkly`        | LaunchDarkly provider                              |
 
-Remaining vendor adapters (Cloudflare Flagship, flagd) are named in
+Remaining vendor adapters (flagd) are named in
 [the plan](docs/PROJECT_PLAN.md) and stay later.
 
 ## Development

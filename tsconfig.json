@@ -6,6 +6,7 @@
     { "path": "./packages/flags-static" },
     { "path": "./packages/flags-azure-appconfig" },
     { "path": "./packages/flags-aws-appconfig" },
+    { "path": "./packages/flags-cloudflare-flagship" },
     { "path": "./packages/flags-launchdarkly" }
   ]
 }

@@ -33,6 +33,12 @@ importers:
         specifier: 0.1.0
         version: link:../flags-contracts
 
+  packages/flags-cloudflare-flagship:
+    dependencies:
+      '@pegma/flags-contracts':
+        specifier: 0.1.0
+        version: link:../flags-contracts
+
   packages/flags-contracts:
     dependencies:
       '@pegma/spine':

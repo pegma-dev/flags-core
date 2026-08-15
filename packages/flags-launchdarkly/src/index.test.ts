@@ -93,7 +93,9 @@ describe("launchDarklyUserContext", () => {
         targetingKey: "user-1",
         tenant: "acme",
         environment: "prod",
-        principalId: "principal-1" as EvaluationContext["principalId"],
+        principalId: "principal-1" as NonNullable<
+          EvaluationContext["principalId"]
+        >,
         attributes: { plan: "pro", key: "should-not-win" },
       }),
     ).toEqual({

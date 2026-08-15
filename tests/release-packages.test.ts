@@ -48,6 +48,7 @@ describe("release package metadata", () => {
       "@pegma/flags-azure-appconfig",
       "@pegma/flags-aws-appconfig",
       "@pegma/flags-cloudflare-flagship",
+      "@pegma/flags-flagd",
       "@pegma/flags-launchdarkly",
     ]);
   });

@@ -83,10 +83,8 @@ const detail = await client.evaluate("checkoutEnabled", {
 | `@pegma/flags-azure-appconfig`     | Azure App Configuration provider                   |
 | `@pegma/flags-aws-appconfig`       | AWS AppConfig provider                             |
 | `@pegma/flags-cloudflare-flagship` | Cloudflare Flagship provider                       |
+| `@pegma/flags-flagd`               | flagd / OpenFeature provider                       |
 | `@pegma/flags-launchdarkly`        | LaunchDarkly provider                              |
-
-Remaining vendor adapters (flagd) are named in
-[the plan](docs/PROJECT_PLAN.md) and stay later.
 
 ## Development
 

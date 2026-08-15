@@ -54,6 +54,12 @@ importers:
         specifier: 0.1.2
         version: 0.1.2
 
+  packages/flags-flagd:
+    dependencies:
+      '@pegma/flags-contracts':
+        specifier: 0.1.0
+        version: link:../flags-contracts
+
   packages/flags-launchdarkly:
     dependencies:
       '@pegma/flags-contracts':

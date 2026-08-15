@@ -203,13 +203,26 @@ function runPublicRegistryNpm(arguments_, options = {}) {
   }
 }
 
+const JSON_VALUE_START =
+  /[\[{"]|true\b|false\b|null\b|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/gu;
+
 export function parseNpmJson(stdout) {
   const text = typeof stdout === "string" ? stdout : "";
-  const start = text.search(/[\[{]/u);
-  if (start === -1) {
-    fail("npm returned no JSON");
+  try {
+    return JSON.parse(text);
+  } catch {
+    // npm --json may be preceded by a human script banner.
   }
-  return JSON.parse(text.slice(start));
+  JSON_VALUE_START.lastIndex = 0;
+  let match = JSON_VALUE_START.exec(text);
+  while (match !== null) {
+    try {
+      return JSON.parse(text.slice(match.index));
+    } catch {
+      match = JSON_VALUE_START.exec(text);
+    }
+  }
+  fail("npm returned no JSON");
 }
 
 function gitCommand() {

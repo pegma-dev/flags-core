@@ -167,6 +167,14 @@ describe("release package metadata", () => {
     expect(source).not.toMatch(/runPnpm\(\["run", "build"\]/u);
   });
 
+  it("parses npm view dist.integrity --json stdout", () => {
+    expect(parseNpmJson('"sha512-abc"\n')).toBe("sha512-abc");
+    expect(parseNpmJson("true\n")).toBe(true);
+    expect(parseNpmJson("false\n")).toBe(false);
+    expect(parseNpmJson("null\n")).toBe(null);
+    expect(parseNpmJson("12\n")).toBe(12);
+  });
+
   it("does not require an importer peerDependencies section", () => {
     const source = readFileSync(
       join(process.cwd(), "scripts", "release-packages.mjs"),

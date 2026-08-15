@@ -2,7 +2,8 @@
 
 `@pegma/flags-contracts`, `@pegma/flags-core`, `@pegma/flags-static`,
 `@pegma/flags-azure-appconfig`, `@pegma/flags-aws-appconfig`,
-`@pegma/flags-cloudflare-flagship`, and `@pegma/flags-launchdarkly`
+`@pegma/flags-cloudflare-flagship`, `@pegma/flags-flagd`, and
+`@pegma/flags-launchdarkly`
 publish
 only from a stable GitHub release. Merging a pull request never
 publishes, and the workflow has no manual-dispatch or npm-token
@@ -16,7 +17,7 @@ Before the first release through this workflow:
 - configure `@pegma/flags-contracts`, `@pegma/flags-core`,
   `@pegma/flags-static`, `@pegma/flags-azure-appconfig`,
   `@pegma/flags-aws-appconfig`, `@pegma/flags-cloudflare-flagship`,
-  and `@pegma/flags-launchdarkly` on npm with
+  `@pegma/flags-flagd`, and `@pegma/flags-launchdarkly` on npm with
   the GitHub Actions trusted publisher
   `pegma-dev/flags-core`, workflow `publish.yml`, environment
   `npm-publish`, and allowed action `npm publish`;

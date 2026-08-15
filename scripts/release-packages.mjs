@@ -52,6 +52,10 @@ export const RELEASE_PACKAGES = [
     name: "@pegma/flags-cloudflare-flagship",
   },
   {
+    directory: "flags-flagd",
+    name: "@pegma/flags-flagd",
+  },
+  {
     directory: "flags-launchdarkly",
     name: "@pegma/flags-launchdarkly",
   },

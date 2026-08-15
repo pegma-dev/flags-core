@@ -263,11 +263,11 @@ function unwrapFlagEntry(
   if (!isFeatureFlagsType(configuration) || !isPlainObject(value)) {
     return value;
   }
-  if (Object.hasOwn(value, key)) {
-    return own(value, key);
-  }
   if (isSingleFeatureFlagEntry(value)) {
     return value;
+  }
+  if (Object.hasOwn(value, key)) {
+    return own(value, key);
   }
   return undefined;
 }

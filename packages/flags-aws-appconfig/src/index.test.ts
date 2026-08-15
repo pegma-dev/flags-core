@@ -345,6 +345,26 @@ describe("createAwsAppConfigFlagProvider", () => {
     });
   });
 
+  it("does not unwrap an attribute that shares the flag key", async () => {
+    const provider = createAwsAppConfigFlagProvider({
+      reader: memoryReader([
+        featureFlag("checkoutEnabled", {
+          enabled: true,
+          checkoutEnabled: "dark",
+        }),
+      ]),
+    });
+    await expect(
+      provider.resolve(
+        request({
+          flagKey: "checkoutEnabled",
+          kind: "boolean",
+          defaultValue: false,
+        }),
+      ),
+    ).resolves.toEqual({ value: true, reason: "TARGETING_MATCH" });
+  });
+
   it("extracts a flag from a retrieved flag map", async () => {
     const provider = createAwsAppConfigFlagProvider({
       reader: memoryReader([

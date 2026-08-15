@@ -28,10 +28,13 @@ export interface LaunchDarklyEvaluationReason {
   readonly errorKind?: string;
 }
 
-/** Narrow detail the injected reader returns. Matches LaunchDarkly. */
+/**
+ * Narrow detail the injected reader returns. Matches LaunchDarkly,
+ * including a nullable `variationIndex` from the Node server SDK.
+ */
 export interface LaunchDarklyEvaluationDetail {
   readonly value: unknown;
-  readonly variationIndex?: number;
+  readonly variationIndex?: number | null;
   readonly reason: LaunchDarklyEvaluationReason;
 }
 

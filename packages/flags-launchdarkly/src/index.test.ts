@@ -193,6 +193,34 @@ describe("createLaunchDarklyFlagProvider", () => {
     ).resolves.toEqual({ value: 25, reason: "TARGETING_MATCH" });
   });
 
+  it("omits variant when the SDK returns a null variationIndex", async () => {
+    const sdkDetail: {
+      readonly value: unknown;
+      readonly variationIndex: number | null;
+      readonly reason: { readonly kind: string };
+    } = {
+      value: "dark",
+      variationIndex: null,
+      reason: { kind: LAUNCHDARKLY_REASON_TARGET_MATCH },
+    };
+    const accepted: LaunchDarklyEvaluationDetail = sdkDetail;
+    const provider = createLaunchDarklyFlagProvider({
+      reader: {
+        async variationDetail() {
+          return accepted;
+        },
+      },
+    });
+    await expect(
+      provider.resolve(
+        request({ flagKey: "theme", kind: "string", defaultValue: "light" }),
+      ),
+    ).resolves.toEqual({
+      value: "dark",
+      reason: "TARGETING_MATCH",
+    });
+  });
+
   it("translates a json flag without interpreting it", async () => {
     const provider = createLaunchDarklyFlagProvider({
       reader: memoryReader({

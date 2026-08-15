@@ -1,9 +1,12 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { EvaluationContext } from "../packages/flags-contracts/src/index.js";
+import { createFlagsClient } from "../packages/flags-core/src/client.js";
 import { flagConformanceCases } from "../packages/flags-core/src/conformance.js";
+import { declareFlags, flag } from "../packages/flags-core/src/schema.js";
 import {
   FLAGD_REASON_DISABLED,
+  FLAGD_REASON_STALE,
   FLAGD_REASON_TARGETING_MATCH,
   createFlagdFlagProvider,
   type FlagdEvaluationDetails,
@@ -107,4 +110,42 @@ describe("flagd provider conformance", () => {
       await testCase.run();
     });
   }
+
+  it("maps STALE through the client as STALE_CACHE with fallback telemetry", async () => {
+    const events: Array<{
+      readonly level: string;
+      readonly message: string;
+      readonly fields?: Readonly<Record<string, unknown>>;
+    }> = [];
+    const client = createFlagsClient({
+      schema: declareFlags({
+        theme: flag.string({ defaultValue: "light" }),
+      }),
+      logger: {
+        log(level, message, fields) {
+          events.push({
+            level,
+            message,
+            ...(fields === undefined ? {} : { fields }),
+          });
+        },
+      },
+      provider: createFlagdFlagProvider({
+        reader: memoryReader({
+          details: {
+            theme: { value: "old", reason: FLAGD_REASON_STALE },
+          },
+        }),
+      }),
+    });
+    const detail = await client.evaluate("theme", { targetingKey: "user-1" });
+    expect(detail).toMatchObject({
+      value: "old",
+      reason: "STALE_CACHE",
+    });
+    expect(events.some((event) => event.message === "flags.fallback")).toBe(
+      true,
+    );
+    expect(events[0]?.fields?.reason).toBe("STALE_CACHE");
+  });
 });

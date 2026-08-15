@@ -161,10 +161,15 @@ function resolveDetail(
     case FLAGD_REASON_DEFAULT:
     case FLAGD_REASON_STATIC:
     case FLAGD_REASON_CACHED:
-    case FLAGD_REASON_STALE:
       return {
         value: detail.value,
         reason: "TARGETING_MATCH",
+        ...variantOf(detail),
+      };
+    case FLAGD_REASON_STALE:
+      return {
+        value: detail.value,
+        reason: "STALE_CACHE",
         ...variantOf(detail),
       };
     case FLAGD_REASON_DISABLED:

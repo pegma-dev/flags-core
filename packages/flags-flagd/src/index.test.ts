@@ -158,7 +158,7 @@ describe("createFlagdFlagProvider", () => {
     });
   });
 
-  it("translates TARGETING_MATCH, SPLIT, DEFAULT, STATIC, CACHED, and STALE as targeting matches", async () => {
+  it("translates TARGETING_MATCH, SPLIT, DEFAULT, STATIC, and CACHED as targeting matches", async () => {
     const provider = createFlagdFlagProvider({
       reader: memoryReader({
         checkoutEnabled: detail(true, FLAGD_REASON_TARGETING_MATCH, {
@@ -170,7 +170,6 @@ describe("createFlagdFlagProvider", () => {
         maxItems: detail(25, FLAGD_REASON_DEFAULT),
         payload: detail({ experiment: "on" }, FLAGD_REASON_STATIC),
         cached: detail("warm", FLAGD_REASON_CACHED),
-        stale: detail("old", FLAGD_REASON_STALE),
       }),
     });
     await expect(
@@ -217,11 +216,23 @@ describe("createFlagdFlagProvider", () => {
         request({ flagKey: "cached", kind: "string", defaultValue: "cold" }),
       ),
     ).resolves.toEqual({ value: "warm", reason: "TARGETING_MATCH" });
+  });
+
+  it("translates STALE as STALE_CACHE", async () => {
+    const provider = createFlagdFlagProvider({
+      reader: memoryReader({
+        theme: detail("old", FLAGD_REASON_STALE, { variant: "cached" }),
+      }),
+    });
     await expect(
       provider.resolve(
-        request({ flagKey: "stale", kind: "string", defaultValue: "fresh" }),
+        request({ flagKey: "theme", kind: "string", defaultValue: "fresh" }),
       ),
-    ).resolves.toEqual({ value: "old", reason: "TARGETING_MATCH" });
+    ).resolves.toEqual({
+      value: "old",
+      reason: "STALE_CACHE",
+      variant: "cached",
+    });
   });
 
   it("omits variant when flagd returns an empty variant", async () => {

@@ -76,7 +76,8 @@ themselves inside the reader.
 
 A missing flag (`undefined` from the reader, or OpenFeature
 `FLAG_NOT_FOUND`) is `DEFAULT_FALLBACK`. `DISABLED` is `DISABLED`.
-`TARGETING_MATCH`, `SPLIT`, `DEFAULT`, `STATIC`, `CACHED`, and `STALE`
-are `TARGETING_MATCH` — flagd already evaluated those rules. Other
-OpenFeature `ERROR` codes propagate so the flags client can record
-`ERROR`.
+`STALE` is `STALE_CACHE` so the flags client records the stale reason
+and emits fallback telemetry. `TARGETING_MATCH`, `SPLIT`, `DEFAULT`,
+`STATIC`, and `CACHED` are `TARGETING_MATCH` — flagd already evaluated
+those rules. Other OpenFeature `ERROR` codes propagate so the flags
+client can record `ERROR`.

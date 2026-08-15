@@ -13,6 +13,7 @@ export type {
 export { EVALUATION_REASONS } from "@pegma/flags-contracts";
 
 export {
+  cacheIdentity,
   createFlagsClient,
   loggableError,
   type FlagsClient,

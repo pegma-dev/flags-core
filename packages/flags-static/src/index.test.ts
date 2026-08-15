@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { createStaticFlagProvider } from "./index.js";
+import { createStaticFlagProvider, staticFlag } from "./index.js";
 
 describe("createStaticFlagProvider", () => {
   it("returns DEFAULT_FALLBACK for a missing key", async () => {
@@ -17,9 +17,9 @@ describe("createStaticFlagProvider", () => {
     });
   });
 
-  it("returns DISABLED when the entry is marked disabled", async () => {
+  it("returns DISABLED only for an explicit staticFlag wrapper", async () => {
     const provider = createStaticFlagProvider({
-      flags: { checkoutEnabled: { value: false, disabled: true } },
+      flags: { checkoutEnabled: staticFlag({ value: false, disabled: true }) },
     });
     const resolution = await provider.resolve({
       flagKey: "checkoutEnabled",
@@ -30,6 +30,23 @@ describe("createStaticFlagProvider", () => {
     expect(resolution).toEqual({
       value: false,
       reason: "DISABLED",
+    });
+  });
+
+  it("treats a JSON object with value/disabled keys as the payload", async () => {
+    const payload = { value: 1, disabled: true, variant: "control" };
+    const provider = createStaticFlagProvider({
+      flags: { payload },
+    });
+    const resolution = await provider.resolve({
+      flagKey: "payload",
+      defaultValue: {},
+      kind: "json",
+      context: { targetingKey: "user-1" },
+    });
+    expect(resolution).toEqual({
+      value: payload,
+      reason: "TARGETING_MATCH",
     });
   });
 

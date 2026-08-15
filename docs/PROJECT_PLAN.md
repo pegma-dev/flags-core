@@ -158,10 +158,11 @@ optional host `decode`. A branded schema library is deferred until a
 consumer brings one.
 
 **Cache key attributes.** The snapshot key is flag + targeting key +
-tenant + environment. If a host needs attribute-sensitive caching, that
-is an adapter concern (the provider already saw the attributes); do not
-hash arbitrary attribute maps in the core unless two consumers require
-it.
+tenant + environment, with omitted fields encoded separately from empty
+strings so identities cannot collide. If a host needs attribute-sensitive
+caching, that is an adapter concern (the provider already saw the
+attributes); do not hash arbitrary attribute maps in the core unless two
+consumers require it.
 
 **Streaming invalidation.** `FlagChangeEvent` is on the port so a later
 adapter can drop cache entries. Phase 1 does not subscribe automatically;

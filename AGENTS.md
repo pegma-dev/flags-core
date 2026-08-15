@@ -38,9 +38,10 @@ The host owns the instance.
 a timeout. On timeout or error, return the default (or a still-valid stale
 cache) with an explicit reason. Never wait unbounded on the request path.
 
-**No silent fallback.** Every fallback emits a log line through the injected
-Spine `Logger` and an `EvaluationDetail.reason`. A default returned without
-both is a bug.
+**No silent fallback.** `createFlagsClient` requires an injected Spine
+`Logger`. Every fallback — including a cached `DEFAULT_FALLBACK`,
+`DISABLED`, or `ERROR` — emits a log line and an `EvaluationDetail.reason`.
+A default returned without both is a bug. Do not default to `noopLogger`.
 
 **Import shared types from spine; pin `@pegma/*` deps exactly.**
 `PrincipalId`, `Clock`, and `Logger` come from `@pegma/spine`. A caret would

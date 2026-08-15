@@ -9,13 +9,21 @@ conformance for Pegma hosts.
 ```ts
 import { declareFlags, flag, createFlagsClient } from "@pegma/flags-core";
 import { createStaticFlagProvider } from "@pegma/flags-static";
+import type { Logger } from "@pegma/spine";
 
 const schema = declareFlags({
   checkoutEnabled: flag.boolean({ defaultValue: false }),
 });
 
+const logger: Logger = {
+  log(level, message, fields) {
+    console.log(level, message, fields);
+  },
+};
+
 const client = createFlagsClient({
   schema,
+  logger,
   provider: createStaticFlagProvider({
     flags: { checkoutEnabled: true },
   }),

@@ -90,8 +90,10 @@ export function flagConformanceCases(
     {
       name: "evaluates a boolean flag",
       async run() {
+        const { logger } = createMemoryLogger();
         const client = createFlagsClient({
           schema,
+          logger,
           provider: createProvider({
             type: "values",
             flags: { checkoutEnabled: true },
@@ -108,8 +110,10 @@ export function flagConformanceCases(
     {
       name: "evaluates a string flag",
       async run() {
+        const { logger } = createMemoryLogger();
         const client = createFlagsClient({
           schema,
+          logger,
           provider: createProvider({
             type: "values",
             flags: { theme: "dark" },
@@ -125,8 +129,10 @@ export function flagConformanceCases(
     {
       name: "evaluates a number flag",
       async run() {
+        const { logger } = createMemoryLogger();
         const client = createFlagsClient({
           schema,
+          logger,
           provider: createProvider({
             type: "values",
             flags: { maxItems: 25 },
@@ -142,8 +148,10 @@ export function flagConformanceCases(
     {
       name: "evaluates a json flag",
       async run() {
+        const { logger } = createMemoryLogger();
         const client = createFlagsClient({
           schema,
+          logger,
           provider: createProvider({
             type: "values",
             flags: { payload: { experiment: "on" } },
@@ -179,8 +187,10 @@ export function flagConformanceCases(
     {
       name: "targeting key is visible to the provider",
       async run() {
+        const { logger } = createMemoryLogger();
         const client = createFlagsClient({
           schema,
+          logger,
           provider: createProvider({
             type: "targeted",
             targetingKey: "user-1",

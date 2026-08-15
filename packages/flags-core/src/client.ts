@@ -5,7 +5,7 @@ import type {
   FlagProvider,
   FlagResolution,
 } from "@pegma/flags-contracts";
-import { noopLogger, systemClock, type Clock, type Logger } from "@pegma/spine";
+import { systemClock, type Clock, type Logger } from "@pegma/spine";
 
 import {
   isJsonValue,
@@ -17,7 +17,6 @@ const DEFAULT_TIMEOUT_MS = 1_000;
 const DEFAULT_CACHE_TTL_MS = 5_000;
 const DEFAULT_STALE_WHILE_REVALIDATE_MS = 30_000;
 const MAX_LOGGED_ERROR_CHARS = 300;
-const CACHE_KEY_SEPARATOR = "\u001f";
 
 class EvaluationTimeoutError extends Error {
   constructor(timeoutMs: number) {
@@ -39,7 +38,7 @@ export interface FlagsClientOptions<
 > {
   readonly schema: TSchema;
   readonly provider: FlagProvider;
-  readonly logger?: Logger;
+  readonly logger: Logger;
   readonly clock?: Clock;
   readonly timeoutMs?: number;
   readonly cacheTtlMs?: number;
@@ -74,13 +73,20 @@ function requireTargetingKey(context: EvaluationContext): void {
   }
 }
 
-function cacheIdentity(flagKey: string, context: EvaluationContext): string {
-  return [
+/**
+ * Encodes flag + targeting identity so omitted fields stay distinct from
+ * empty strings, and component text cannot cross a separator boundary.
+ */
+export function cacheIdentity(
+  flagKey: string,
+  context: EvaluationContext,
+): string {
+  return JSON.stringify({
     flagKey,
-    context.targetingKey,
-    context.tenant ?? "",
-    context.environment ?? "",
-  ].join(CACHE_KEY_SEPARATOR);
+    targetingKey: context.targetingKey,
+    tenant: context.tenant === undefined ? null : context.tenant,
+    environment: context.environment === undefined ? null : context.environment,
+  });
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -190,7 +196,13 @@ function logFallback(
 export function createFlagsClient<
   TSchema extends Record<string, FlagDefinition<unknown>>,
 >(options: FlagsClientOptions<TSchema>): FlagsClient<TSchema> {
-  const logger = options.logger ?? noopLogger;
+  if (
+    options.logger === undefined ||
+    typeof options.logger.log !== "function"
+  ) {
+    throw new Error("createFlagsClient requires an injected Logger");
+  }
+  const logger = options.logger;
   const clock = options.clock ?? systemClock;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const cacheTtlMs = options.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
@@ -201,6 +213,7 @@ export function createFlagsClient<
 
   function readCache(identity: string, atMs: number): CacheEntry | undefined {
     if (cacheTtlMs <= 0) {
+      cache.delete(identity);
       return undefined;
     }
     const entry = cache.get(identity);
@@ -214,6 +227,7 @@ export function createFlagsClient<
     if (age < cacheTtlMs + staleWhileRevalidateMs) {
       return entry;
     }
+    cache.delete(identity);
     return undefined;
   }
 
@@ -305,10 +319,10 @@ export function createFlagsClient<
           : { errorCode: resolution.errorCode }),
         ...(resolution.errorMessage === undefined
           ? {}
-          : { errorMessage: resolution.errorMessage }),
+          : { errorMessage: loggableError(resolution.errorMessage) }),
       });
     } catch (error) {
-      const stale = cache.get(identity);
+      const stale = readCache(identity, nowMs(clock));
       if (stale !== undefined) {
         logFallback(logger, "STALE_CACHE", flagKey, context, error);
         return toDetail(flagKey, stale.value as T, "STALE_CACHE", {
@@ -340,6 +354,9 @@ export function createFlagsClient<
       if (cached !== undefined) {
         const age = atMs - cached.storedAtMs;
         if (age < cacheTtlMs) {
+          if (cached.reason !== "TARGETING_MATCH") {
+            logFallback(logger, cached.reason, flagKey, context);
+          }
           return toDetail(
             flagKey,
             cached.value as FlagValueOf<TSchema[K]>,
@@ -385,9 +402,8 @@ export function createFlagsClient<
         cache.clear();
         return;
       }
-      const prefix = `${flagKey}${CACHE_KEY_SEPARATOR}`;
-      for (const identity of cache.keys()) {
-        if (identity.startsWith(prefix)) {
+      for (const [identity, entry] of cache) {
+        if (entry.flagKey === flagKey) {
           cache.delete(identity);
         }
       }

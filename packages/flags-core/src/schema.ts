@@ -71,7 +71,15 @@ function requireKind(
   }
 }
 
-/** True when `value` can round-trip through JSON. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/** True when `value` is JSON-round-trippable plain data. */
 export function isJsonValue(value: unknown): value is JsonValue {
   if (value === null) {
     return true;
@@ -84,14 +92,26 @@ export function isJsonValue(value: unknown): value is JsonValue {
     return Number.isFinite(value);
   }
   if (Array.isArray(value)) {
-    return value.every(isJsonValue);
+    if (Object.getPrototypeOf(value) !== Array.prototype) {
+      return false;
+    }
+    for (const [index, entry] of value.entries()) {
+      if (!Object.hasOwn(value, index) || !isJsonValue(entry)) {
+        return false;
+      }
+    }
+    return true;
   }
-  if (kind === "object") {
-    return Object.values(value as Record<string, unknown>).every((entry) =>
-      isJsonValue(entry),
-    );
+  if (!isPlainObject(value)) {
+    return false;
   }
-  return false;
+  for (const key of Object.keys(value)) {
+    const entry = value[key];
+    if (entry === undefined || !isJsonValue(entry)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export const flag = {

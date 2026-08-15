@@ -1,7 +1,10 @@
 import { describe, it } from "vitest";
 
 import { flagConformanceCases } from "../packages/flags-core/src/conformance.js";
-import { createStaticFlagProvider } from "../packages/flags-static/src/index.js";
+import {
+  createStaticFlagProvider,
+  staticFlag,
+} from "../packages/flags-static/src/index.js";
 
 const cases = flagConformanceCases((scenario) => {
   switch (scenario.type) {
@@ -24,7 +27,10 @@ const cases = flagConformanceCases((scenario) => {
     case "disabled":
       return createStaticFlagProvider({
         flags: {
-          [scenario.flagKey]: { value: scenario.value, disabled: true },
+          [scenario.flagKey]: staticFlag({
+            value: scenario.value,
+            disabled: true,
+          }),
         },
       });
   }

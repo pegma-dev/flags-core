@@ -7,7 +7,11 @@ import type {
   FlagResolutionRequest,
 } from "@pegma/flags-contracts";
 
+/** Distinguishes a static wrapper from a JSON payload that happens to use `value`. */
+export const STATIC_FLAG_BRAND = Symbol.for("@pegma/flags-static");
+
 export interface StaticFlagValue {
+  readonly [STATIC_FLAG_BRAND]: true;
   readonly value: unknown;
   readonly disabled?: boolean;
   readonly variant?: string;
@@ -23,13 +27,25 @@ export interface StaticFlagProviderOptions {
   readonly error?: unknown;
 }
 
+export function staticFlag(options: {
+  readonly value: unknown;
+  readonly disabled?: boolean;
+  readonly variant?: string;
+}): StaticFlagValue {
+  return {
+    [STATIC_FLAG_BRAND]: true,
+    value: options.value,
+    ...(options.disabled === undefined ? {} : { disabled: options.disabled }),
+    ...(options.variant === undefined ? {} : { variant: options.variant }),
+  };
+}
+
 function isStaticFlagValue(value: unknown): value is StaticFlagValue {
   return (
     value !== null &&
     typeof value === "object" &&
-    !Array.isArray(value) &&
-    Object.hasOwn(value, "value") &&
-    (Object.hasOwn(value, "disabled") || Object.hasOwn(value, "variant"))
+    STATIC_FLAG_BRAND in value &&
+    (value as StaticFlagValue)[STATIC_FLAG_BRAND] === true
   );
 }
 

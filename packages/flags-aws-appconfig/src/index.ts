@@ -71,11 +71,23 @@ function hasVariants(value: unknown): boolean {
   return isPlainObject(value) && Array.isArray(own(value, "_variants"));
 }
 
-function isSingleFeatureFlagEntry(value: unknown): value is object {
+function isFlagEntry(value: unknown): value is object {
   return (
     isPlainObject(value) &&
-    (Object.hasOwn(value, "enabled") || hasVariants(value))
+    (typeof own(value, "enabled") === "boolean" || hasVariants(value))
   );
+}
+
+function isFeatureFlagMap(value: unknown): value is object {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  for (const childKey of Object.keys(value)) {
+    if (isFlagEntry(own(value, childKey))) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -263,7 +275,10 @@ function unwrapFlagEntry(
   if (!isFeatureFlagsType(configuration) || !isPlainObject(value)) {
     return value;
   }
-  if (isSingleFeatureFlagEntry(value)) {
+  if (isFeatureFlagMap(value)) {
+    return Object.hasOwn(value, key) ? own(value, key) : undefined;
+  }
+  if (isFlagEntry(value) || Object.hasOwn(value, "enabled")) {
     return value;
   }
   if (Object.hasOwn(value, key)) {

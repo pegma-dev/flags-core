@@ -365,6 +365,26 @@ describe("createAwsAppConfigFlagProvider", () => {
     ).resolves.toEqual({ value: true, reason: "TARGETING_MATCH" });
   });
 
+  it("unwraps other keys from a map that includes a flag named enabled", async () => {
+    const provider = createAwsAppConfigFlagProvider({
+      reader: memoryReader([
+        featureFlag("checkoutEnabled", {
+          enabled: { enabled: false },
+          checkoutEnabled: { enabled: true },
+        }),
+      ]),
+    });
+    await expect(
+      provider.resolve(
+        request({
+          flagKey: "checkoutEnabled",
+          kind: "boolean",
+          defaultValue: false,
+        }),
+      ),
+    ).resolves.toEqual({ value: true, reason: "TARGETING_MATCH" });
+  });
+
   it("extracts a flag from a retrieved flag map", async () => {
     const provider = createAwsAppConfigFlagProvider({
       reader: memoryReader([

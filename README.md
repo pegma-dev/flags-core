@@ -81,9 +81,10 @@ const detail = await client.evaluate("checkoutEnabled", {
 | `@pegma/flags-core`            | Schema, client, cache, timeout, health helper      |
 | `@pegma/flags-static`          | In-memory provider for tests and local development |
 | `@pegma/flags-azure-appconfig` | Azure App Configuration provider                   |
+| `@pegma/flags-launchdarkly`    | LaunchDarkly provider                              |
 
-Remaining vendor adapters are named in [the plan](docs/PROJECT_PLAN.md)
-and stay out of this repository until a named host needs them.
+Remaining vendor adapters (AWS AppConfig, Cloudflare Flagship, flagd)
+are named in [the plan](docs/PROJECT_PLAN.md) and stay later.
 
 ## Development
 

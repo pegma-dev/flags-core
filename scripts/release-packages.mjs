@@ -43,6 +43,10 @@ export const RELEASE_PACKAGES = [
     directory: "flags-azure-appconfig",
     name: "@pegma/flags-azure-appconfig",
   },
+  {
+    directory: "flags-launchdarkly",
+    name: "@pegma/flags-launchdarkly",
+  },
 ];
 
 const RELEASE_NAMES = new Set(RELEASE_PACKAGES.map(({ name }) => name));

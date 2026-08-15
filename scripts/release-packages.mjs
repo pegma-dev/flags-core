@@ -44,6 +44,10 @@ export const RELEASE_PACKAGES = [
     name: "@pegma/flags-azure-appconfig",
   },
   {
+    directory: "flags-aws-appconfig",
+    name: "@pegma/flags-aws-appconfig",
+  },
+  {
     directory: "flags-launchdarkly",
     name: "@pegma/flags-launchdarkly",
   },

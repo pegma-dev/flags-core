@@ -46,6 +46,7 @@ describe("release package metadata", () => {
       "@pegma/flags-core",
       "@pegma/flags-static",
       "@pegma/flags-azure-appconfig",
+      "@pegma/flags-aws-appconfig",
       "@pegma/flags-launchdarkly",
     ]);
   });

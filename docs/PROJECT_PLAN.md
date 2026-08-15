@@ -2,11 +2,11 @@
 
 ## Status
 
-**Stage:** Phase 1 implemented in-tree; unpublished. Public API unstable
+**Stage:** Phase 2 implemented in-tree; unpublished. Public API unstable
 (`0.x`).
 
-**First named consumers:** none yet. Vendor adapters stay gated on a real
-host that needs them.
+**First named consumers:** RetireGolden.org (Azure App Configuration).
+Remaining vendor adapters stay gated on a real host that needs them.
 
 **License:** MIT
 
@@ -104,7 +104,7 @@ package here would invite the wrong extractions.
 
 - Flag authoring, admin UI, or a Pegma-owned flag store.
 - A custom expression / rule language or AppConfig document evaluator.
-- Vendor adapter packages before a real consumer needs them.
+- Vendor adapter packages before a named consumer needs them.
 - Metrics, experiment assignment, or percentage math in the core.
 
 ## Package architecture
@@ -115,14 +115,15 @@ package here would invite the wrong extractions.
 | `@pegma/flags-core`                | Schema, client, cache, conformance | 1     |
 | `@pegma/flags-static`              | Zero-dep in-memory provider        | 1     |
 | `@pegma/flags-launchdarkly`        | LaunchDarkly adapter               | later |
-| `@pegma/flags-azure-appconfig`     | Azure App Configuration adapter    | later |
+| `@pegma/flags-azure-appconfig`     | Azure App Configuration adapter    | 2     |
 | `@pegma/flags-aws-appconfig`       | AWS AppConfig adapter              | later |
 | `@pegma/flags-cloudflare-flagship` | Cloudflare Flagship adapter        | later |
 | `@pegma/flags-flagd`               | flagd / OpenFeature adapter        | later |
 
-Dependencies: `@pegma/spine` pinned exactly. `@pegma/flags-static` depends
-only on `@pegma/flags-contracts` (no vendor SDK). Adapters, when created,
-pin contracts (and spine, if they need `Logger` / `Clock`) exactly.
+Dependencies: `@pegma/spine` pinned exactly. `@pegma/flags-static` and
+`@pegma/flags-azure-appconfig` depend only on `@pegma/flags-contracts`
+(no vendor SDK). Adapters pin contracts (and spine, if they need
+`Logger` / `Clock`) exactly.
 
 ## Delivery phases
 
@@ -136,14 +137,15 @@ publish.
 
 ### Phase 2 — first vendor adapter, gated on a consumer
 
-Create one adapter package only when a named host needs that vendor.
-That adapter must pass the Phase 1 conformance suite. Do not pre-build
-the others.
+`@pegma/flags-azure-appconfig` for RetireGolden.org. The adapter
+translates App Configuration settings through an injected reader and
+must pass the Phase 1 conformance suite. It does not evaluate targeting
+filters or percentage rollouts. Do not pre-build the other vendors.
 
 ### Phase 3 — remaining adapters
 
-LaunchDarkly, Azure App Configuration, AWS AppConfig, Cloudflare
-Flagship, and flagd, each as its own package, each gated the same way.
+LaunchDarkly, AWS AppConfig, Cloudflare Flagship, and flagd, each as
+its own package, each gated the same way.
 
 ### Phase 4 — publish
 

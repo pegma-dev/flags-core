@@ -1,6 +1,6 @@
 import { describe, it } from "vitest";
 
-import type { EvaluationContext } from "@pegma/flags-contracts";
+import type { EvaluationContext } from "../packages/flags-contracts/src/index.js";
 import { flagConformanceCases } from "../packages/flags-core/src/conformance.js";
 import {
   AZURE_FEATURE_FLAG_CONTENT_TYPE,

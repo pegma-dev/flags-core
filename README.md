@@ -75,14 +75,15 @@ const detail = await client.evaluate("checkoutEnabled", {
 
 ## Packages
 
-| Package                  | Responsibility                                     |
-| ------------------------ | -------------------------------------------------- |
-| `@pegma/flags-contracts` | Context, detail, reasons, provider port            |
-| `@pegma/flags-core`      | Schema, client, cache, timeout, health helper      |
-| `@pegma/flags-static`    | In-memory provider for tests and local development |
+| Package                        | Responsibility                                     |
+| ------------------------------ | -------------------------------------------------- |
+| `@pegma/flags-contracts`       | Context, detail, reasons, provider port            |
+| `@pegma/flags-core`            | Schema, client, cache, timeout, health helper      |
+| `@pegma/flags-static`          | In-memory provider for tests and local development |
+| `@pegma/flags-azure-appconfig` | Azure App Configuration provider                   |
 
-Vendor adapters are named in [the plan](docs/PROJECT_PLAN.md) and are not
-in this repository yet.
+Remaining vendor adapters are named in [the plan](docs/PROJECT_PLAN.md)
+and stay out of this repository until a named host needs them.
 
 ## Development
 

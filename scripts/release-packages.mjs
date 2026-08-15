@@ -39,6 +39,10 @@ export const RELEASE_PACKAGES = [
     directory: "flags-static",
     name: "@pegma/flags-static",
   },
+  {
+    directory: "flags-azure-appconfig",
+    name: "@pegma/flags-azure-appconfig",
+  },
 ];
 
 const RELEASE_NAMES = new Set(RELEASE_PACKAGES.map(({ name }) => name));

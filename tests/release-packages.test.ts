@@ -45,6 +45,7 @@ describe("release package metadata", () => {
       "@pegma/flags-contracts",
       "@pegma/flags-core",
       "@pegma/flags-static",
+      "@pegma/flags-azure-appconfig",
     ]);
   });
 

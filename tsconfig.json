@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/flags-contracts" },
     { "path": "./packages/flags-core" },
-    { "path": "./packages/flags-static" }
+    { "path": "./packages/flags-static" },
+    { "path": "./packages/flags-azure-appconfig" }
   ]
 }

@@ -1,17 +1,18 @@
 # Release operations
 
-`@pegma/flags-contracts`, `@pegma/flags-core`, and `@pegma/flags-static`
-publish only from a stable GitHub release. Merging a pull request never
-publishes, and the workflow has no manual-dispatch or npm-token fallback.
-Phase 1 does not publish; this runbook exists so the first release does
-not invent a lane.
+`@pegma/flags-contracts`, `@pegma/flags-core`, `@pegma/flags-static`, and
+`@pegma/flags-azure-appconfig` publish only from a stable GitHub release.
+Merging a pull request never publishes, and the workflow has no
+manual-dispatch or npm-token fallback. Phase 2 does not publish; this
+runbook exists so the first release does not invent a lane.
 
 ## Required external configuration
 
 Before the first release through this workflow:
 
-- configure `@pegma/flags-contracts`, `@pegma/flags-core`, and
-  `@pegma/flags-static` on npm with the GitHub Actions trusted publisher
+- configure `@pegma/flags-contracts`, `@pegma/flags-core`,
+  `@pegma/flags-static`, and `@pegma/flags-azure-appconfig` on npm with
+  the GitHub Actions trusted publisher
   `pegma-dev/flags-core`, workflow `publish.yml`, environment
   `npm-publish`, and allowed action `npm publish`;
 - create the GitHub `npm-publish` environment. A second reviewer is not

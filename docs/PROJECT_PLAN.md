@@ -140,7 +140,8 @@ publish.
 `@pegma/flags-azure-appconfig` for RetireGolden.org. The adapter
 translates App Configuration settings through an injected reader and
 must pass the Phase 1 conformance suite. It does not evaluate targeting
-filters or percentage rollouts. Do not pre-build the other vendors.
+filters or percentage rollouts, and it rejects an enabled document that
+still carries those rules. Do not pre-build the other vendors.
 
 ### Phase 3 — remaining adapters
 

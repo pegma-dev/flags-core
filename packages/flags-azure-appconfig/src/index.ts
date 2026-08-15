@@ -133,6 +133,51 @@ function allocatedVariant(
   return variantByName(own(document, "variants"), name);
 }
 
+function hasRules(value: unknown): boolean {
+  if (value === undefined) {
+    return false;
+  }
+  return !Array.isArray(value) || value.length > 0;
+}
+
+/**
+ * True when the document still carries targeting or rollout rules this
+ * adapter does not evaluate. Empty `client_filters` is Azure's usual
+ * unconditional shape and is not a rule.
+ */
+function hasUnevaluatedTargeting(document: object): boolean {
+  const conditions = own(document, "conditions");
+  if (
+    conditions !== null &&
+    typeof conditions === "object" &&
+    !Array.isArray(conditions) &&
+    hasRules(own(conditions, "client_filters"))
+  ) {
+    return true;
+  }
+  const allocation = own(document, "allocation");
+  if (
+    allocation === null ||
+    typeof allocation !== "object" ||
+    Array.isArray(allocation)
+  ) {
+    return false;
+  }
+  return (
+    hasRules(own(allocation, "percentile")) ||
+    hasRules(own(allocation, "user")) ||
+    hasRules(own(allocation, "group"))
+  );
+}
+
+function refuseUnevaluatedTargeting(document: object, flagKey: string): void {
+  if (hasUnevaluatedTargeting(document)) {
+    throw new Error(
+      `Azure feature flag ${flagKey} has targeting filters or a percentage rollout that this adapter does not evaluate`,
+    );
+  }
+}
+
 function resolveFeatureFlag(
   request: FlagResolutionRequest,
   raw: string,
@@ -164,6 +209,8 @@ function resolveFeatureFlag(
     }
     return { value: false, reason: "DISABLED" };
   }
+
+  refuseUnevaluatedTargeting(parsed, request.flagKey);
 
   const allocated = allocatedVariant(parsed, "default_when_enabled");
   if (allocated !== undefined) {
@@ -202,7 +249,10 @@ function resolveSetting(
 /**
  * Translates Azure App Configuration settings into {@link FlagProvider}
  * resolutions. Targeting filters and percentage rollouts are not evaluated
- * here — they belong in the vendor or in the injected reader.
+ * here. An enabled document that still carries those rules is rejected so
+ * this adapter cannot report a targeting match it did not compute. The
+ * injected reader must return an already-evaluated setting when the host
+ * needs Azure Feature Management.
  */
 export function createAzureAppConfigFlagProvider(
   options: AzureAppConfigFlagProviderOptions,

@@ -179,7 +179,28 @@ describe("createAzureAppConfigFlagProvider", () => {
     ).resolves.toEqual({ value: "dark", reason: "TARGETING_MATCH" });
   });
 
-  it("translates an enabled feature flag without evaluating filters", async () => {
+  it("translates an enabled feature flag with no targeting rules", async () => {
+    const provider = createAzureAppConfigFlagProvider({
+      reader: memoryReader([
+        featureFlag("checkoutEnabled", {
+          id: "checkoutEnabled",
+          enabled: true,
+          conditions: { client_filters: [] },
+        }),
+      ]),
+    });
+    await expect(
+      provider.resolve(
+        request({
+          flagKey: "checkoutEnabled",
+          kind: "boolean",
+          defaultValue: false,
+        }),
+      ),
+    ).resolves.toEqual({ value: true, reason: "TARGETING_MATCH" });
+  });
+
+  it("does not treat a Microsoft.Percentage document as an unconditional match", async () => {
     const provider = createAzureAppConfigFlagProvider({
       reader: memoryReader([
         featureFlag("checkoutEnabled", {
@@ -204,7 +225,56 @@ describe("createAzureAppConfigFlagProvider", () => {
           defaultValue: false,
         }),
       ),
-    ).resolves.toEqual({ value: true, reason: "TARGETING_MATCH" });
+    ).rejects.toThrow("does not evaluate");
+  });
+
+  it("does not treat allocation.percentile as a stored default match", async () => {
+    const provider = createAzureAppConfigFlagProvider({
+      reader: memoryReader([
+        featureFlag("theme", {
+          id: "theme",
+          enabled: true,
+          variants: [{ name: "dark", configuration_value: "dark" }],
+          allocation: {
+            default_when_enabled: "dark",
+            percentile: [{ variant: "dark", from: 0, to: 50 }],
+          },
+        }),
+      ]),
+    });
+    await expect(
+      provider.resolve(
+        request({ flagKey: "theme", kind: "string", defaultValue: "light" }),
+      ),
+    ).rejects.toThrow("does not evaluate");
+  });
+
+  it("keeps a disabled feature flag DISABLED even when leftover filters exist", async () => {
+    const provider = createAzureAppConfigFlagProvider({
+      reader: memoryReader([
+        featureFlag("checkoutEnabled", {
+          id: "checkoutEnabled",
+          enabled: false,
+          conditions: {
+            client_filters: [
+              {
+                name: "Microsoft.Percentage",
+                parameters: { Value: 100 },
+              },
+            ],
+          },
+        }),
+      ]),
+    });
+    await expect(
+      provider.resolve(
+        request({
+          flagKey: "checkoutEnabled",
+          kind: "boolean",
+          defaultValue: true,
+        }),
+      ),
+    ).resolves.toEqual({ value: false, reason: "DISABLED" });
   });
 
   it("translates a disabled feature flag as DISABLED", async () => {

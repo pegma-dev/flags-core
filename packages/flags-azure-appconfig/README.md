@@ -54,6 +54,8 @@ const client = createFlagsClient({ schema, logger, provider });
 ```
 
 A missing key is `DEFAULT_FALLBACK`. A feature flag with `enabled: false`
-is `DISABLED`. Percentage and audience filters stay in Azure Feature
-Management — wrap that evaluator in the injected reader if the host needs
-them.
+is `DISABLED`. An enabled document that still carries targeting filters
+or a percentage rollout is rejected — this adapter does not evaluate
+those rules and will not report `TARGETING_MATCH` for them. Wrap Azure
+Feature Management in the injected reader and return an already-evaluated
+setting if the host needs that evaluation.

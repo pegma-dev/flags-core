@@ -67,14 +67,26 @@ function isFeatureFlagsType(configuration: AwsAppConfigConfiguration): boolean {
   return configuration.type === AWS_APPCONFIG_FEATURE_FLAGS_TYPE;
 }
 
-function isFeatureFlagEntry(value: unknown): value is object {
-  if (!isPlainObject(value)) {
-    return false;
-  }
+function hasVariants(value: unknown): boolean {
+  return isPlainObject(value) && Array.isArray(own(value, "_variants"));
+}
+
+function isSingleFeatureFlagEntry(value: unknown): value is object {
   return (
-    typeof own(value, "enabled") === "boolean" ||
-    Array.isArray(own(value, "_variants"))
+    isPlainObject(value) &&
+    (Object.hasOwn(value, "enabled") || hasVariants(value))
   );
+}
+
+/**
+ * Feature-flag documents need AWS metadata. A boolean `enabled` field
+ * alone is a valid JSON payload and is not enough.
+ */
+function isFeatureFlagDocument(
+  configuration: AwsAppConfigConfiguration,
+  value: unknown,
+): boolean {
+  return isFeatureFlagsType(configuration) || hasVariants(value);
 }
 
 function isFlagSetDocument(value: unknown): value is object {
@@ -237,18 +249,27 @@ function resolveFeatureFlag(
   return booleanFromFeatureFlag(request, true, "TARGETING_MATCH");
 }
 
-function unwrapFlagEntry(value: unknown, key: string): unknown {
+function unwrapFlagEntry(
+  value: unknown,
+  key: string,
+  configuration: AwsAppConfigConfiguration,
+): unknown {
   if (isFlagSetDocument(value)) {
+    if (!isFeatureFlagsType(configuration)) {
+      return value;
+    }
     return awsAppConfigFlagValue(value, key);
   }
-  if (
-    isPlainObject(value) &&
-    Object.hasOwn(value, key) &&
-    isFeatureFlagEntry(own(value, key))
-  ) {
+  if (!isFeatureFlagsType(configuration) || !isPlainObject(value)) {
+    return value;
+  }
+  if (Object.hasOwn(value, key)) {
     return own(value, key);
   }
-  return value;
+  if (isSingleFeatureFlagEntry(value)) {
+    return value;
+  }
+  return undefined;
 }
 
 function parseTypedValue(kind: FlagValueKind, raw: string): unknown {
@@ -263,7 +284,7 @@ function resolveValue(
   configuration: AwsAppConfigConfiguration,
   value: unknown,
 ): FlagResolution {
-  if (isFeatureFlagEntry(value) || isFeatureFlagsType(configuration)) {
+  if (isFeatureFlagDocument(configuration, value)) {
     if (!isPlainObject(value)) {
       throw new Error(
         "AWS AppConfig feature flag document must be a JSON object",
@@ -294,7 +315,7 @@ function resolveConfiguration(
     typeof raw === "string" && isFeatureFlagsType(configuration)
       ? parseJson(raw, "feature flag")
       : raw;
-  const unwrapped = unwrapFlagEntry(parsed, configuration.key);
+  const unwrapped = unwrapFlagEntry(parsed, configuration.key, configuration);
   if (unwrapped === undefined) {
     return { value: request.defaultValue, reason: "DEFAULT_FALLBACK" };
   }

@@ -40,6 +40,10 @@ function configuration(
   };
 }
 
+function featureFlag(key: string, value: unknown): AwsAppConfigConfiguration {
+  return configuration(key, value, { type: AWS_APPCONFIG_FEATURE_FLAGS_TYPE });
+}
+
 function memoryReader(
   configurations: readonly AwsAppConfigConfiguration[],
   extras: {
@@ -92,6 +96,9 @@ describe("awsAppConfigFlagValue", () => {
     expect(awsAppConfigFlagValue({ version: "1", values: {} }, "theme")).toBe(
       undefined,
     );
+    expect(
+      awsAppConfigFlagValue({ checkoutEnabled: { enabled: true } }, "theme"),
+    ).toBe(undefined);
   });
 });
 
@@ -200,9 +207,7 @@ describe("createAwsAppConfigFlagProvider", () => {
 
   it("translates an enabled feature flag with no targeting rules", async () => {
     const provider = createAwsAppConfigFlagProvider({
-      reader: memoryReader([
-        configuration("checkoutEnabled", { enabled: true }),
-      ]),
+      reader: memoryReader([featureFlag("checkoutEnabled", { enabled: true })]),
     });
     await expect(
       provider.resolve(
@@ -218,7 +223,7 @@ describe("createAwsAppConfigFlagProvider", () => {
   it("does not treat a multi-variant rule as an unconditional match", async () => {
     const provider = createAwsAppConfigFlagProvider({
       reader: memoryReader([
-        configuration("checkoutEnabled", {
+        featureFlag("checkoutEnabled", {
           enabled: true,
           _variants: [
             {
@@ -245,7 +250,7 @@ describe("createAwsAppConfigFlagProvider", () => {
   it("does not treat a percentage split as a stored default match", async () => {
     const provider = createAwsAppConfigFlagProvider({
       reader: memoryReader([
-        configuration("checkoutEnabled", {
+        featureFlag("checkoutEnabled", {
           _variants: [
             {
               name: "on",
@@ -271,7 +276,7 @@ describe("createAwsAppConfigFlagProvider", () => {
   it("keeps a disabled feature flag DISABLED even when leftover rules exist", async () => {
     const provider = createAwsAppConfigFlagProvider({
       reader: memoryReader([
-        configuration("checkoutEnabled", {
+        featureFlag("checkoutEnabled", {
           enabled: false,
           _variants: [
             {
@@ -302,7 +307,7 @@ describe("createAwsAppConfigFlagProvider", () => {
   it("translates a disabled feature flag as DISABLED", async () => {
     const provider = createAwsAppConfigFlagProvider({
       reader: memoryReader([
-        configuration("checkoutEnabled", { enabled: false }),
+        featureFlag("checkoutEnabled", { enabled: false }),
       ]),
     });
     await expect(
@@ -319,7 +324,7 @@ describe("createAwsAppConfigFlagProvider", () => {
   it("reads a default variant without a rule as stored data, not a rollout", async () => {
     const provider = createAwsAppConfigFlagProvider({
       reader: memoryReader([
-        configuration("checkoutEnabled", {
+        featureFlag("checkoutEnabled", {
           enabled: false,
           _variants: [{ name: "stored", enabled: true }],
         }),
@@ -343,7 +348,7 @@ describe("createAwsAppConfigFlagProvider", () => {
   it("extracts a flag from a retrieved flag map", async () => {
     const provider = createAwsAppConfigFlagProvider({
       reader: memoryReader([
-        configuration("checkoutEnabled", {
+        featureFlag("checkoutEnabled", {
           checkoutEnabled: { enabled: true },
           theme: { enabled: false },
         }),
@@ -410,7 +415,7 @@ describe("createAwsAppConfigFlagProvider", () => {
     const provider = createAwsAppConfigFlagProvider({
       keyOf: (flagKey) => `app/${flagKey}`,
       reader: memoryReader(
-        [configuration("app/checkoutEnabled", { enabled: true })],
+        [featureFlag("app/checkoutEnabled", { enabled: true })],
         {
           onGet(getRequest) {
             seen.push(getRequest);
@@ -440,14 +445,75 @@ describe("createAwsAppConfigFlagProvider", () => {
     ).rejects.toThrow("not valid JSON");
   });
 
+  it("returns an ordinary JSON object that contains enabled", async () => {
+    const payload = { enabled: true, mode: "dark" };
+    const provider = createAwsAppConfigFlagProvider({
+      reader: memoryReader([configuration("payload", payload)]),
+    });
+    await expect(
+      provider.resolve(
+        request({
+          flagKey: "payload",
+          kind: "json",
+          defaultValue: { enabled: false, mode: "light" },
+        }),
+      ),
+    ).resolves.toEqual({
+      value: payload,
+      reason: "TARGETING_MATCH",
+    });
+  });
+
+  it("returns DEFAULT_FALLBACK for a missing key in a feature-flag document", async () => {
+    const provider = createAwsAppConfigFlagProvider({
+      reader: memoryReader([
+        featureFlag("theme", {
+          version: "1",
+          flags: { checkoutEnabled: { name: "checkoutEnabled" } },
+          values: { checkoutEnabled: { enabled: true } },
+        }),
+      ]),
+    });
+    await expect(
+      provider.resolve(
+        request({
+          flagKey: "theme",
+          kind: "string",
+          defaultValue: "light",
+        }),
+      ),
+    ).resolves.toEqual({
+      value: "light",
+      reason: "DEFAULT_FALLBACK",
+    });
+  });
+
+  it("returns DEFAULT_FALLBACK for a missing key in a feature-flag map", async () => {
+    const provider = createAwsAppConfigFlagProvider({
+      reader: memoryReader([
+        featureFlag("theme", {
+          checkoutEnabled: { enabled: true },
+        }),
+      ]),
+    });
+    await expect(
+      provider.resolve(
+        request({
+          flagKey: "theme",
+          kind: "string",
+          defaultValue: "light",
+        }),
+      ),
+    ).resolves.toEqual({
+      value: "light",
+      reason: "DEFAULT_FALLBACK",
+    });
+  });
+
   it("throws when a feature flag document is malformed", async () => {
     const provider = createAwsAppConfigFlagProvider({
       reader: memoryReader([
-        configuration(
-          "checkoutEnabled",
-          {},
-          { type: AWS_APPCONFIG_FEATURE_FLAGS_TYPE },
-        ),
+        featureFlag("checkoutEnabled", { enabled: "yes" }),
       ]),
     });
     await expect(

@@ -16,15 +16,20 @@ AppConfig Agent `?flag=` response, or `GetLatestConfiguration` after the
 host applied context). This package can also map:
 
 - ordinary typed values (string as-is; boolean, number, and json via JSON)
-- an unconditional feature-flag object with a boolean `enabled` field
+- a feature-flag document marked `type: AWS.AppConfig.FeatureFlags`, or
+  one that carries AWS `_variants` metadata
 - a stored default variant that has no `rule`
 
-An enabled document that still carries `_variants` with a `rule` is
+A JSON object that happens to include `enabled` is a payload, not a
+feature-flag document. Set `type: AWS.AppConfig.FeatureFlags` when the
+reader returns AppConfig feature-flag data or a retrieved flag map. An
+enabled document that still carries `_variants` with a `rule` is
 rejected. Wrap AppConfig evaluation in the injected reader if the host
 needs those rules.
 
 ```ts
 import {
+  AWS_APPCONFIG_FEATURE_FLAGS_TYPE,
   awsAppConfigFlagValue,
   createAwsAppConfigFlagProvider,
 } from "@pegma/flags-aws-appconfig";
@@ -49,7 +54,7 @@ const provider = createAwsAppConfigFlagProvider({
       if (value === undefined) {
         return undefined;
       }
-      return { key, value };
+      return { key, value, type: AWS_APPCONFIG_FEATURE_FLAGS_TYPE };
     },
   },
 });

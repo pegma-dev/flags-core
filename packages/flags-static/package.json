@@ -1,6 +1,6 @@
 {
   "name": "@pegma/flags-static",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "In-memory static flag provider for Pegma tests and local development.",
   "license": "MIT",
   "type": "module",
@@ -29,11 +29,11 @@
     "directory": "packages/flags-static"
   },
   "dependencies": {
-    "@pegma/flags-contracts": "0.1.0"
+    "@pegma/flags-contracts": "0.1.1"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "prepack": "pnpm run build"
+    "prepack": "tsc -p tsconfig.json"
   }
 }

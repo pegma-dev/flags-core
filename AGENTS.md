@@ -80,7 +80,7 @@ scaffold.
 Phase 3 lands `@pegma/flags-launchdarkly`,
 `@pegma/flags-aws-appconfig`, `@pegma/flags-cloudflare-flagship`, and
 `@pegma/flags-flagd` beside the Phase 1 packages and
-`@pegma/flags-azure-appconfig` at `0.1.0` (unpublished). Phase 3 vendor
+`@pegma/flags-azure-appconfig` at `0.1.1` (unpublished). Phase 3 vendor
 adapters are complete.
 
 Siblings: [spine](https://github.com/pegma-dev/spine),

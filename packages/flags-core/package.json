@@ -1,6 +1,6 @@
 {
   "name": "@pegma/flags-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Typed flag schema, evaluation client, and adapter conformance for Pegma hosts.",
   "license": "MIT",
   "type": "module",
@@ -29,12 +29,12 @@
     "directory": "packages/flags-core"
   },
   "dependencies": {
-    "@pegma/flags-contracts": "0.1.0",
+    "@pegma/flags-contracts": "0.1.1",
     "@pegma/spine": "0.1.2"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "prepack": "pnpm run build"
+    "prepack": "tsc -p tsconfig.json"
   }
 }

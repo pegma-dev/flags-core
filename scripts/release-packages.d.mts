@@ -82,6 +82,13 @@ export function lockDependencyMatches(
   options?: { readonly workspace?: boolean },
 ): boolean;
 
+export function parseNpmJson(stdout: string): unknown;
+
+export function publicRegistryArguments(
+  arguments_: readonly string[],
+  registry?: string,
+): string[];
+
 export function parseArguments(
   arguments_: readonly string[],
 ): ReleaseCommandOptions;

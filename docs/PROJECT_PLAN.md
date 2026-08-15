@@ -2,11 +2,11 @@
 
 ## Status
 
-**Stage:** Phase 3 LaunchDarkly and AWS AppConfig adapters implemented
-in-tree; unpublished. Public API unstable (`0.x`).
+**Stage:** Phase 3 LaunchDarkly, AWS AppConfig, and Cloudflare Flagship
+adapters implemented in-tree; unpublished. Public API unstable (`0.x`).
 
 **First named consumers:** RetireGolden.org (Azure App Configuration).
-Remaining vendor adapters (Cloudflare Flagship, flagd) are still later.
+Remaining vendor adapters (flagd) are still later.
 
 **License:** MIT
 
@@ -104,7 +104,7 @@ package here would invite the wrong extractions.
 
 - Flag authoring, admin UI, or a Pegma-owned flag store.
 - A custom expression / rule language or AppConfig document evaluator.
-- Cloudflare Flagship or flagd adapter packages in this phase.
+- flagd adapter packages in this phase.
 - Metrics, experiment assignment, or percentage math in the core.
 
 ## Package architecture
@@ -117,14 +117,14 @@ package here would invite the wrong extractions.
 | `@pegma/flags-launchdarkly`        | LaunchDarkly adapter               | 3     |
 | `@pegma/flags-azure-appconfig`     | Azure App Configuration adapter    | 2     |
 | `@pegma/flags-aws-appconfig`       | AWS AppConfig adapter              | 3     |
-| `@pegma/flags-cloudflare-flagship` | Cloudflare Flagship adapter        | later |
+| `@pegma/flags-cloudflare-flagship` | Cloudflare Flagship adapter        | 3     |
 | `@pegma/flags-flagd`               | flagd / OpenFeature adapter        | later |
 
 Dependencies: `@pegma/spine` pinned exactly. `@pegma/flags-static`,
-`@pegma/flags-azure-appconfig`, `@pegma/flags-aws-appconfig`, and
-`@pegma/flags-launchdarkly` depend only on `@pegma/flags-contracts` (no
-vendor SDK). Adapters pin contracts (and spine, if they need `Logger` /
-`Clock`) exactly.
+`@pegma/flags-azure-appconfig`, `@pegma/flags-aws-appconfig`,
+`@pegma/flags-cloudflare-flagship`, and `@pegma/flags-launchdarkly`
+depend only on `@pegma/flags-contracts` (no vendor SDK). Adapters pin
+contracts (and spine, if they need `Logger` / `Clock`) exactly.
 
 ## Delivery phases
 
@@ -146,13 +146,14 @@ still carries those rules. Do not pre-build the other vendors.
 
 ### Phase 3 — remaining adapters
 
-`@pegma/flags-launchdarkly` and `@pegma/flags-aws-appconfig` are
-in-tree. Each translates an injected reader result and must pass the
-Phase 1 conformance suite. Neither imports a vendor SDK nor evaluates
-targeting rules. The AWS adapter maps an already-evaluated value or an
-unconditional feature-flag setting and rejects an enabled document that
-still carries multi-variant rules. Cloudflare Flagship and flagd remain
-later, each as its own package.
+`@pegma/flags-launchdarkly`, `@pegma/flags-aws-appconfig`, and
+`@pegma/flags-cloudflare-flagship` are in-tree. Each translates an
+injected reader result and must pass the Phase 1 conformance suite.
+None import a vendor SDK or evaluate targeting rules. The AWS adapter
+maps an already-evaluated value or an unconditional feature-flag
+setting and rejects an enabled document that still carries
+multi-variant rules. The Flagship adapter translates an already-evaluated
+`*Details` result. flagd remains later as its own package.
 
 ### Phase 4 — publish
 

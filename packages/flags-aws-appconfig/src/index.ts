@@ -289,11 +289,12 @@ function resolveConfiguration(
       `AWS AppConfig configuration ${configuration.key} has no value`,
     );
   }
-  let value = configuration.value;
-  if (typeof value === "string" && isFeatureFlagsType(configuration)) {
-    value = parseJson(value, "feature flag");
-  }
-  const unwrapped = unwrapFlagEntry(value, configuration.key);
+  const raw = configuration.value;
+  const parsed =
+    typeof raw === "string" && isFeatureFlagsType(configuration)
+      ? parseJson(raw, "feature flag")
+      : raw;
+  const unwrapped = unwrapFlagEntry(parsed, configuration.key);
   if (unwrapped === undefined) {
     return { value: request.defaultValue, reason: "DEFAULT_FALLBACK" };
   }

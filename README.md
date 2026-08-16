@@ -7,8 +7,8 @@ Provider-neutral feature flag evaluation for Pegma hosts: typed schemas,
 evaluation context, and adapter conformance.
 
 > [!IMPORTANT]
-> Pegma is in early `0.x` development. Packages are prepared, but no public
-> API is stable. Nothing in this repository has been published to npm.
+> Pegma is in early `0.x` development. The eight public packages are on npm
+> at `0.1.1`. No public API is stable.
 
 ## Why it exists
 

@@ -2,8 +2,7 @@
 
 ## Status
 
-**Stage:** Phase 3 vendor adapters implemented in-tree; unpublished.
-Public API unstable (`0.x`).
+**Stage:** Published `0.1.1` (2026-08-15). Public API unstable (`0.x`).
 
 **First named consumers:** RetireGolden.org (Azure App Configuration).
 Phase 3 vendor adapters (LaunchDarkly, AWS AppConfig, Cloudflare
@@ -160,8 +159,8 @@ complete.
 
 ### Phase 4 — publish
 
-Trusted-publisher npm release from a signed `vX.Y.Z` tag on `main`, once
-a consumer is ready to take a versioned artifact. See
+Trusted-publisher npm release from a signed `vX.Y.Z` tag on `main`. All
+eight public packages are on npm at `0.1.1` (2026-08-15). See
 [RELEASING.md](RELEASING.md).
 
 ## Open questions

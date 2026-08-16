@@ -3,8 +3,7 @@
 ## Supported versions
 
 This project is in early `0.x` development. Security fixes land on the latest
-published release of `@pegma/flags-contracts`, `@pegma/flags-core`, and
-`@pegma/flags-static` only. Nothing is published yet.
+published release (`0.1.1`) of the eight public packages only.
 
 ## Reporting a vulnerability
 

@@ -72,16 +72,16 @@ Publishing is trusted-publisher only; no tokens exist. A release starts from a
 protected signed annotated `vX.Y.Z` tag already on `origin/main`, followed by
 `gh release create vX.Y.Z --verify-tag`. The unprivileged preparation job runs
 the gate and packs the exact artifacts; only the minimal publish job receives
-OIDC authority. See `docs/RELEASING.md`. Do not publish from this Phase 3
-scaffold.
+OIDC authority. See `docs/RELEASING.md`.
 
 ## Where things stand
 
 Phase 3 lands `@pegma/flags-launchdarkly`,
 `@pegma/flags-aws-appconfig`, `@pegma/flags-cloudflare-flagship`, and
 `@pegma/flags-flagd` beside the Phase 1 packages and
-`@pegma/flags-azure-appconfig` at `0.1.1` (unpublished). Phase 3 vendor
-adapters are complete.
+`@pegma/flags-azure-appconfig`. All eight public packages are on npm at
+`0.1.1` (2026-08-15). Public API unstable (`0.x`). Phase 3 vendor
+adapters are complete. Phase 4 (publish) has happened.
 
 Siblings: [spine](https://github.com/pegma-dev/spine),
 [health](https://github.com/pegma-dev/health),

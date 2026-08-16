@@ -1,6 +1,6 @@
 {
   "name": "@pegma/flags-aws-appconfig",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AWS AppConfig FlagProvider for Pegma hosts.",
   "license": "MIT",
   "type": "module",
@@ -29,11 +29,11 @@
     "directory": "packages/flags-aws-appconfig"
   },
   "dependencies": {
-    "@pegma/flags-contracts": "0.1.0"
+    "@pegma/flags-contracts": "0.1.1"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",
-    "prepack": "pnpm run build"
+    "prepack": "tsc -p tsconfig.json"
   }
 }

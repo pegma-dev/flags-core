@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import {
   mkdtemp,
   mkdir,
@@ -14,6 +15,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPOSITORY_URL = "git+https://github.com/pegma-dev/flags-core.git";
+const PUBLIC_NPM_REGISTRY = "https://registry.npmjs.org/";
 const NODE_RANGE = ">=22";
 const REVIEWED_PNPM_VERSION = "10.34.5";
 const STABLE_SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
@@ -104,11 +106,14 @@ function run(command, arguments_, options = {}) {
   return result;
 }
 
-function runPnpm(arguments_, options = {}) {
-  return run(process.platform === "win32" ? "pnpm.cmd" : "pnpm", arguments_, {
-    ...options,
-    shell: process.platform === "win32",
-  });
+function isPnpmCli(path) {
+  const normalized = path.replaceAll("\\", "/").toLowerCase();
+  return (
+    normalized.includes("/pnpm/") ||
+    normalized.endsWith("/pnpm") ||
+    normalized.endsWith("/pnpm.cjs") ||
+    normalized.endsWith("/pnpm.js")
+  );
 }
 
 function npmEnvironment(env) {
@@ -118,11 +123,106 @@ function npmEnvironment(env) {
 }
 
 function runNpm(arguments_, options = {}) {
-  return run(process.platform === "win32" ? "npm.cmd" : "npm", arguments_, {
+  const npmExecPath = process.env.npm_execpath;
+  const runOptions = {
     ...options,
     env: npmEnvironment(options.env ?? process.env),
     shell: process.platform === "win32",
-  });
+  };
+  return npmExecPath === undefined || isPnpmCli(npmExecPath)
+    ? run(
+        process.platform === "win32" ? "npm.cmd" : "npm",
+        arguments_,
+        runOptions,
+      )
+    : run(process.execPath, [npmExecPath, ...arguments_], runOptions);
+}
+
+function isolatedNpmEnvironment() {
+  const environment = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    const normalized = key.toLowerCase();
+    if (
+      normalized.startsWith("npm_config_") ||
+      normalized === "node_auth_token" ||
+      normalized === "npm_token" ||
+      normalized === "npm_auth_token" ||
+      normalized === "npm_execpath" ||
+      normalized === "npm_lifecycle_event" ||
+      normalized === "npm_lifecycle_script" ||
+      normalized === "npm_command"
+    ) {
+      continue;
+    }
+    environment[key] = value;
+  }
+  return environment;
+}
+
+export function publicRegistryArguments(
+  arguments_,
+  registry = PUBLIC_NPM_REGISTRY,
+) {
+  return [
+    ...arguments_,
+    "--registry",
+    registry,
+    `--@pegma:registry=${registry}`,
+  ];
+}
+
+function runPublicRegistryNpm(arguments_, options = {}) {
+  const { registry = PUBLIC_NPM_REGISTRY, ...runOptions } = options;
+  const configDirectory = mkdtempSync(
+    join(tmpdir(), "pegma-flags-core-npm-config-"),
+  );
+  const userConfig = join(configDirectory, "user.npmrc");
+  const globalConfig = join(configDirectory, "global.npmrc");
+  writeFileSync(userConfig, "", { mode: 0o600 });
+  writeFileSync(globalConfig, "", { mode: 0o600 });
+  try {
+    return runNpm(
+      publicRegistryArguments(
+        [
+          ...arguments_,
+          "--userconfig",
+          userConfig,
+          "--globalconfig",
+          globalConfig,
+        ],
+        registry,
+      ),
+      {
+        ...runOptions,
+        cwd: runOptions.cwd ?? configDirectory,
+        env: isolatedNpmEnvironment(),
+      },
+    );
+  } finally {
+    rmSync(configDirectory, { recursive: true, force: true });
+  }
+}
+
+const JSON_VALUE_START =
+  /[\[{"]|true\b|false\b|null\b|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/gu;
+
+export function parseNpmJson(stdout) {
+  const text = typeof stdout === "string" ? stdout : "";
+  try {
+    return JSON.parse(text);
+  } catch {
+    // npm --json may be preceded by a human script banner.
+  }
+  JSON_VALUE_START.lastIndex = 0;
+  let match = JSON_VALUE_START.exec(text);
+  while (match !== null) {
+    try {
+      return JSON.parse(text.slice(match.index));
+    } catch {
+      match = JSON_VALUE_START.exec(text);
+    }
+  }
+  fail("npm returned no JSON");
 }
 
 function gitCommand() {
@@ -486,7 +586,10 @@ async function validatePackage(root, definition, lockfile) {
   }
   if (
     typeof manifest.scripts?.prepack !== "string" ||
-    !manifest.scripts.prepack.includes("build")
+    !(
+      manifest.scripts.prepack.includes("build") ||
+      manifest.scripts.prepack.includes("tsc")
+    )
   ) {
     fail(`${definition.name} must build during prepack`);
   }
@@ -666,14 +769,14 @@ function verifyPackedFiles(manifest, files) {
   }
 }
 
-async function smokeTestTarballs(packageRecords) {
+async function smokeTestTarballs(packageRecords, registry) {
   const directory = await mkdtemp(join(tmpdir(), "flags-core-release-smoke-"));
   try {
     await writeFile(
       join(directory, "package.json"),
       '{"name":"flags-core-release-smoke","private":true,"type":"module"}\n',
     );
-    runNpm(
+    runPublicRegistryNpm(
       [
         "install",
         "--ignore-scripts",
@@ -682,7 +785,7 @@ async function smokeTestTarballs(packageRecords) {
         "--package-lock=false",
         ...packageRecords.map(({ tarballPath }) => tarballPath),
       ],
-      { cwd: directory, capture: true },
+      { cwd: directory, capture: true, registry },
     );
     for (const { manifest } of packageRecords) {
       for (const specifier of exportSpecifiers(manifest)) {
@@ -702,14 +805,18 @@ async function smokeTestTarballs(packageRecords) {
   }
 }
 
-function queryRegistryIntegrity(name, version) {
+function queryRegistryIntegrity(name, version, registry) {
   const spec = `${name}@${version}`;
-  const result = runNpm(["view", spec, "dist.integrity", "--json"], {
-    capture: true,
-    allowFailure: true,
-  });
+  const result = runPublicRegistryNpm(
+    ["view", spec, "dist.integrity", "--json"],
+    {
+      capture: true,
+      allowFailure: true,
+      registry,
+    },
+  );
   if (result.status === 0) {
-    const integrity = JSON.parse(result.stdout);
+    const integrity = parseNpmJson(result.stdout);
     if (typeof integrity !== "string" || integrity.length === 0) {
       fail(`${spec} exists without dist.integrity`);
     }
@@ -747,11 +854,14 @@ export async function prepareRelease(options = {}) {
     fail(`release output directory must be empty: ${output}`);
   }
 
-  runPnpm(["run", "build"], { cwd: root });
+  runPublicRegistryNpm(["run", "build"], {
+    cwd: root,
+    registry: options.registry,
+  });
   const records = [];
   const tagVersion = releaseTag?.slice(1);
   for (const { definition, manifest } of packages) {
-    const result = runNpm(
+    const result = runPublicRegistryNpm(
       [
         "pack",
         join(root, "packages", definition.directory),
@@ -759,9 +869,9 @@ export async function prepareRelease(options = {}) {
         "--pack-destination",
         output,
       ],
-      { cwd: root, capture: true },
+      { cwd: root, capture: true, registry: options.registry },
     );
-    const [packed] = JSON.parse(result.stdout);
+    const [packed] = parseNpmJson(result.stdout);
     if (
       packed?.name !== definition.name ||
       packed?.version !== manifest.version ||
@@ -794,13 +904,14 @@ export async function prepareRelease(options = {}) {
       manifest,
     });
   }
-  await smokeTestTarballs(records);
+  await smokeTestTarballs(records, options.registry);
 
   if (releaseTag !== undefined) {
     for (const record of records.filter(({ publish }) => !publish)) {
       const registryIntegrity = queryRegistryIntegrity(
         record.name,
         record.version,
+        options.registry,
       );
       if (
         registryIntegrity === null ||
@@ -956,9 +1067,10 @@ export async function publishPreparedRelease(options = {}) {
       continue;
     }
     const tarball = resolve(dirname(manifestPath), record.tarball);
-    runNpm(["publish", tarball, "--access", "public", "--provenance"], {
-      cwd: dirname(manifestPath),
-    });
+    runPublicRegistryNpm(
+      ["publish", tarball, "--access", "public", "--provenance"],
+      { cwd: dirname(manifestPath) },
+    );
     confirmRegistryIntegrity(record);
   }
 }

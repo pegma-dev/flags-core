@@ -9,6 +9,7 @@ import {
   decodeYamlScalar,
   lockfileResolvedVersionMatches,
   parseArguments,
+  parseNpmJson,
   parsePnpmImporterDependencies,
   resolvedVersionSatisfies,
   validateReleaseTag,
@@ -136,6 +137,42 @@ describe("release package metadata", () => {
     );
     expect(source).toMatch(/function runNpm\(/u);
     expect(source).toMatch(/delete next\.npm_execpath/u);
+  });
+
+  it("does not JSON.parse pnpm's human script banner", () => {
+    const banner = `> @pegma/flags-contracts@0.1.0 build /home/runner/work/flags-core/flags-core/packages/flags-contracts
+> tsc -p tsconfig.json
+`;
+    const packed = [
+      {
+        name: "@pegma/flags-contracts",
+        version: "0.1.1",
+        filename: "pegma-flags-contracts-0.1.1.tgz",
+        files: [],
+      },
+    ];
+    const mixed = `${banner}${JSON.stringify(packed)}\n`;
+    expect(() => JSON.parse(mixed)).toThrow(SyntaxError);
+    expect(parseNpmJson(mixed)).toEqual(packed);
+
+    const source = readFileSync(
+      join(process.cwd(), "scripts", "release-packages.mjs"),
+      "utf8",
+    );
+    expect(source).toMatch(/const \[packed\] = parseNpmJson\(/u);
+    expect(source).not.toMatch(
+      /JSON\.parse\(\s*(?:result|packedResult)\.stdout\s*\)/u,
+    );
+    expect(source).toMatch(/runPublicRegistryNpm\(\["run", "build"\]/u);
+    expect(source).not.toMatch(/runPnpm\(\["run", "build"\]/u);
+  });
+
+  it("parses npm view dist.integrity --json stdout", () => {
+    expect(parseNpmJson('"sha512-abc"\n')).toBe("sha512-abc");
+    expect(parseNpmJson("true\n")).toBe(true);
+    expect(parseNpmJson("false\n")).toBe(false);
+    expect(parseNpmJson("null\n")).toBe(null);
+    expect(parseNpmJson("12\n")).toBe(12);
   });
 
   it("does not require an importer peerDependencies section", () => {

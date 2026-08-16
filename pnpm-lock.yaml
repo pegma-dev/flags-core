@@ -24,19 +24,19 @@ importers:
   packages/flags-aws-appconfig:
     dependencies:
       '@pegma/flags-contracts':
-        specifier: 0.1.0
+        specifier: 0.1.1
         version: link:../flags-contracts
 
   packages/flags-azure-appconfig:
     dependencies:
       '@pegma/flags-contracts':
-        specifier: 0.1.0
+        specifier: 0.1.1
         version: link:../flags-contracts
 
   packages/flags-cloudflare-flagship:
     dependencies:
       '@pegma/flags-contracts':
-        specifier: 0.1.0
+        specifier: 0.1.1
         version: link:../flags-contracts
 
   packages/flags-contracts:
@@ -48,7 +48,7 @@ importers:
   packages/flags-core:
     dependencies:
       '@pegma/flags-contracts':
-        specifier: 0.1.0
+        specifier: 0.1.1
         version: link:../flags-contracts
       '@pegma/spine':
         specifier: 0.1.2
@@ -57,19 +57,19 @@ importers:
   packages/flags-flagd:
     dependencies:
       '@pegma/flags-contracts':
-        specifier: 0.1.0
+        specifier: 0.1.1
         version: link:../flags-contracts
 
   packages/flags-launchdarkly:
     dependencies:
       '@pegma/flags-contracts':
-        specifier: 0.1.0
+        specifier: 0.1.1
         version: link:../flags-contracts
 
   packages/flags-static:
     dependencies:
       '@pegma/flags-contracts':
-        specifier: 0.1.0
+        specifier: 0.1.1
         version: link:../flags-contracts
 
 packages:

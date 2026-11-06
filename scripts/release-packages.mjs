@@ -773,7 +773,6 @@ function verifyPackedFiles(manifest, files) {
 
 const PACKAGE_DEPENDENCY_SECTIONS = [
   "dependencies",
-  "devDependencies",
   "optionalDependencies",
   "peerDependencies",
 ];
@@ -800,11 +799,25 @@ export function validatePackedManifest(sourceManifest, packedManifest, files) {
     }
   }
   for (const section of PACKAGE_DEPENDENCY_SECTIONS) {
-    for (const [name, version] of Object.entries(
-      packedManifest[section] ?? {},
-    )) {
-      if (name.startsWith("@pegma/") && !EXACT_VERSION.test(version)) {
-        fail(`${sourceManifest.name} must pin ${name} exactly in its tarball`);
+    const sourceDependencies = sourceManifest[section] ?? {};
+    const packedDependencies = packedManifest[section] ?? {};
+    const names = new Set(
+      [
+        ...Object.keys(sourceDependencies),
+        ...Object.keys(packedDependencies),
+      ].filter((name) => name.startsWith("@pegma/")),
+    );
+    for (const name of names) {
+      const sourceVersion = sourceDependencies[name];
+      const packedVersion = packedDependencies[name];
+      if (
+        packedVersion !== sourceVersion ||
+        typeof packedVersion !== "string" ||
+        !EXACT_VERSION.test(packedVersion)
+      ) {
+        fail(
+          `${sourceManifest.name} must preserve the exact ${name} pin in its tarball`,
+        );
       }
     }
   }
@@ -831,6 +844,11 @@ export async function verifyReleaseInventory(directory, manifest) {
     fail("release inventory contains duplicate filenames");
   }
   const entries = await readdir(directory, { withFileTypes: true });
+  for (const expectedName of expected) {
+    if (!entries.some(({ name }) => name === expectedName)) {
+      fail(`release directory is missing ${expectedName}`);
+    }
+  }
   if (entries.length !== expected.size) {
     fail("release directory inventory does not match the package manifest");
   }
@@ -846,11 +864,6 @@ export async function verifyReleaseInventory(directory, manifest) {
     const metadata = await lstat(join(directory, entry.name));
     if (!metadata.isFile() || metadata.isSymbolicLink()) {
       fail(`release entry must be a regular file: ${entry.name}`);
-    }
-  }
-  for (const expectedName of expected) {
-    if (!entries.some(({ name }) => name === expectedName)) {
-      fail(`release directory is missing ${expectedName}`);
     }
   }
 }

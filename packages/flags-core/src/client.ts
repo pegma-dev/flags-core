@@ -225,11 +225,7 @@ function waitForProvider(
       },
       (error: unknown) => {
         clearTimeout(timer);
-        reject(
-          work.controller.signal.aborted
-            ? new EvaluationTimeoutError(timeoutMs)
-            : error,
-        );
+        reject(error);
       },
     );
   });
@@ -547,6 +543,7 @@ export function createFlagsClient<
         throw new Error(`unknown flag ${flagKey}`);
       }
       const definition = options.schema[flagKey];
+      // JavaScript callers can still supply an own undefined definition.
       if (definition === undefined) {
         throw new Error(`unknown flag ${flagKey}`);
       }

@@ -44,9 +44,9 @@ After that pull request is merged, create a signed annotated tag at the exact
 create the GitHub release with `--verify-tag`. Do not let GitHub create the tag
 and never move or recreate a release tag.
 
-Before any checkout or dependency command, the release workflow fetches only
-`main` and the named tag into a temporary bare repository and verifies that
-the tag:
+Before checkout or dependency commands in the preparation job, the release
+workflow fetches only `main` and the named tag into a temporary bare
+repository and verifies that the tag:
 
 - is a stable annotated `vX.Y.Z` tag signed by an allowed signer;
 - matches a public package version;
@@ -61,10 +61,11 @@ manifest, records SHA-1, SHA-256, and SHA-512 integrity, seals the exact
 release-directory inventory, and uploads the prepared artifacts. The lockfile
 source of truth is `pnpm-lock.yaml`.
 
-A separate unprivileged job downloads that artifact and installs every
-tarball into a clean consumer before importing every public export. Only the
-`npm-publish` job receives `id-token: write`. That job authenticates the tag
-again, checks out no repository content, installs no project dependencies,
+A separate unprivileged job checks out the immutable event commit, downloads
+the sealed artifact, and installs every tarball into a clean consumer before
+importing every public export. Only the `npm-publish` job receives
+`id-token: write`. That job authenticates the tag again before any dependency
+command, checks out no repository content, installs no project dependencies,
 and does not download pnpm. Workflow-owned code verifies the prepared
 manifest digest, exact file inventory, and tarball hashes, then publishes from
 an isolated temporary directory with npm provenance.

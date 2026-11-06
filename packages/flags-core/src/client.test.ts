@@ -630,6 +630,41 @@ describe("createFlagsClient", () => {
     await Promise.resolve();
   });
 
+  it("does not report a close-initiated provider error as a timeout", async () => {
+    const { logger } = memoryLogger();
+    const client = createFlagsClient({
+      schema,
+      logger,
+      provider: {
+        name: "close-aware",
+        capabilities() {
+          return { static: true, streaming: false, targeting: false };
+        },
+        resolve(request) {
+          return new Promise<FlagResolution>((_resolve, reject) => {
+            request.signal?.addEventListener(
+              "abort",
+              () => {
+                reject(new Error("provider closed"));
+              },
+              { once: true },
+            );
+          });
+        },
+      },
+    });
+    const evaluation = client.evaluate("checkoutEnabled", {
+      targetingKey: "user-1",
+    });
+    await Promise.resolve();
+    await client.close();
+    await expect(evaluation).resolves.toMatchObject({
+      reason: "ERROR",
+      errorCode: "PROVIDER",
+      errorMessage: "provider closed",
+    });
+  });
+
   it("bounds unresolved provider calls", async () => {
     let resolves = 0;
     const { logger } = memoryLogger();

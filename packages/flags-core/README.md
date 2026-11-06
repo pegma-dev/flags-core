@@ -38,3 +38,11 @@ The client never blocks a request on an unbounded provider call. A timeout
 or error returns the default (or a stale cache entry) with an explicit
 reason and a log line. This package does not author flags and does not
 evaluate targeting rules.
+
+Provider calls receive an optional `AbortSignal`. Concurrent misses for the
+same evaluation context share one provider call, and the evaluation cache is
+an LRU capped at 1,024 entries by default. Set `maxCacheEntries` to a smaller
+non-negative integer when a host needs a tighter bound; zero disables stored
+entries. Cache identity covers the complete evaluation context, while client
+fallback logs include the flag key and coarse reason without the raw
+`targetingKey`.

@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import {
   mkdtemp,
+  lstat,
   mkdir,
   readFile,
   readdir,
@@ -231,6 +232,7 @@ function gitCommand() {
 
 function hashTarball(bytes) {
   return {
+    sha256: createHash("sha256").update(bytes).digest("hex"),
     shasum: createHash("sha1").update(bytes).digest("hex"),
     integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
   };
@@ -769,6 +771,90 @@ function verifyPackedFiles(manifest, files) {
   }
 }
 
+const PACKAGE_DEPENDENCY_SECTIONS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+];
+const INSTALL_LIFECYCLE_SCRIPTS = [
+  "preinstall",
+  "install",
+  "postinstall",
+  "prepublish",
+  "preprepare",
+  "prepare",
+  "postprepare",
+];
+
+export function validatePackedManifest(sourceManifest, packedManifest, files) {
+  if (
+    packedManifest?.name !== sourceManifest.name ||
+    packedManifest?.version !== sourceManifest.version
+  ) {
+    fail(`${sourceManifest.name} tarball manifest identity has changed`);
+  }
+  for (const script of INSTALL_LIFECYCLE_SCRIPTS) {
+    if (Object.hasOwn(packedManifest.scripts ?? {}, script)) {
+      fail(`${sourceManifest.name} tarball must not define ${script}`);
+    }
+  }
+  for (const section of PACKAGE_DEPENDENCY_SECTIONS) {
+    for (const [name, version] of Object.entries(
+      packedManifest[section] ?? {},
+    )) {
+      if (name.startsWith("@pegma/") && !EXACT_VERSION.test(version)) {
+        fail(`${sourceManifest.name} must pin ${name} exactly in its tarball`);
+      }
+    }
+  }
+  verifyPackedFiles(packedManifest, files);
+}
+
+function extractPackedManifest(tarballPath) {
+  const result = run("tar", ["-xOf", tarballPath, "package/package.json"], {
+    capture: true,
+  });
+  try {
+    return parseNpmJson(result.stdout);
+  } catch {
+    fail(`${basename(tarballPath)} contains an invalid package manifest`);
+  }
+}
+
+export async function verifyReleaseInventory(directory, manifest) {
+  const expected = new Set([
+    "package-manifest.json",
+    ...manifest.packages.map(({ tarball }) => tarball),
+  ]);
+  if (expected.size !== manifest.packages.length + 1) {
+    fail("release inventory contains duplicate filenames");
+  }
+  const entries = await readdir(directory, { withFileTypes: true });
+  if (entries.length !== expected.size) {
+    fail("release directory inventory does not match the package manifest");
+  }
+  for (const entry of entries) {
+    if (
+      entry.name.startsWith(".") ||
+      !expected.has(entry.name) ||
+      !entry.isFile() ||
+      entry.isSymbolicLink()
+    ) {
+      fail(`release directory contains an unexpected entry: ${entry.name}`);
+    }
+    const metadata = await lstat(join(directory, entry.name));
+    if (!metadata.isFile() || metadata.isSymbolicLink()) {
+      fail(`release entry must be a regular file: ${entry.name}`);
+    }
+  }
+  for (const expectedName of expected) {
+    if (!entries.some(({ name }) => name === expectedName)) {
+      fail(`release directory is missing ${expectedName}`);
+    }
+  }
+}
+
 async function smokeTestTarballs(packageRecords, registry) {
   const directory = await mkdtemp(join(tmpdir(), "flags-core-release-smoke-"));
   try {
@@ -889,12 +975,15 @@ export async function prepareRelease(options = {}) {
     ) {
       fail(`${definition.name} tarball hashes do not match npm pack metadata`);
     }
+    const packedManifest = extractPackedManifest(tarballPath);
+    validatePackedManifest(manifest, packedManifest, packed.files);
     records.push({
       name: definition.name,
       version: manifest.version,
       directory: definition.directory,
       tarball: basename(tarballPath),
       tarballPath,
+      sha256: hashes.sha256,
       integrity: hashes.integrity,
       shasum: hashes.shasum,
       publish: tagVersion === undefined || manifest.version === tagVersion,
@@ -904,8 +993,6 @@ export async function prepareRelease(options = {}) {
       manifest,
     });
   }
-  await smokeTestTarballs(records, options.registry);
-
   if (releaseTag !== undefined) {
     for (const record of records.filter(({ publish }) => !publish)) {
       const registryIntegrity = queryRegistryIntegrity(
@@ -934,10 +1021,11 @@ export async function prepareRelease(options = {}) {
   };
   const manifestPath = join(output, "package-manifest.json");
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  await verifyReleaseInventory(output, manifest);
   return { manifestPath, manifest };
 }
 
-async function verifyPreparedManifest(manifestPath) {
+export async function verifyPreparedManifest(manifestPath) {
   const manifest = await readJson(manifestPath);
   if (
     manifest.schemaVersion !== 1 ||
@@ -962,6 +1050,7 @@ async function verifyPreparedManifest(manifestPath) {
   if (!manifest.packages.some(({ publish }) => publish)) {
     fail("prepared package manifest has no release candidates");
   }
+  await verifyReleaseInventory(dirname(manifestPath), manifest);
   for (const [index, record] of manifest.packages.entries()) {
     const definition = RELEASE_PACKAGES[index];
     const expectedTarball = `${definition.name
@@ -972,6 +1061,7 @@ async function verifyPreparedManifest(manifestPath) {
       record.tarball !== expectedTarball ||
       !STABLE_SEMVER.test(record.version) ||
       record.publish !== (record.version === tagVersion) ||
+      !/^[0-9a-f]{64}$/u.test(record.sha256) ||
       typeof record.integrity !== "string" ||
       typeof record.shasum !== "string" ||
       !Array.isArray(record.files)
@@ -984,6 +1074,7 @@ async function verifyPreparedManifest(manifestPath) {
     }
     const hashes = hashTarball(await readFile(tarball));
     if (
+      !safeEqual(hashes.sha256, record.sha256) ||
       !safeEqual(hashes.integrity, record.integrity) ||
       !safeEqual(hashes.shasum, record.shasum)
     ) {
@@ -991,6 +1082,21 @@ async function verifyPreparedManifest(manifestPath) {
     }
   }
   return manifest;
+}
+
+export async function smokePreparedRelease(options = {}) {
+  const manifestPath = resolve(
+    options.manifest ?? ".release/package-manifest.json",
+  );
+  const manifest = await verifyPreparedManifest(manifestPath);
+  const packageRecords = manifest.packages.map((record) => {
+    const tarballPath = resolve(dirname(manifestPath), record.tarball);
+    return {
+      tarballPath,
+      manifest: extractPackedManifest(tarballPath),
+    };
+  });
+  await smokeTestTarballs(packageRecords, options.registry);
 }
 
 function requireTrustedPublishingNpm() {
@@ -1134,7 +1240,11 @@ async function main() {
     await publishPreparedRelease(options);
     return;
   }
-  fail("usage: release-packages.mjs <check|pack|publish> [options]");
+  if (command === "smoke") {
+    await smokePreparedRelease(options);
+    return;
+  }
+  fail("usage: release-packages.mjs <check|pack|smoke|publish> [options]");
 }
 
 const isMain =

@@ -61,6 +61,7 @@ export interface FlagResolutionRequest {
   readonly defaultValue: unknown;
   readonly kind: FlagValueKind;
   readonly context: EvaluationContext;
+  readonly signal?: AbortSignal;
 }
 
 export interface FlagProviderCapabilities {

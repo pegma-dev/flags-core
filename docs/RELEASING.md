@@ -44,24 +44,30 @@ After that pull request is merged, create a signed annotated tag at the exact
 create the GitHub release with `--verify-tag`. Do not let GitHub create the tag
 and never move or recreate a release tag.
 
-The release workflow verifies that the tag:
+Before any checkout or dependency command, the release workflow fetches only
+`main` and the named tag into a temporary bare repository and verifies that
+the tag:
 
 - is a stable annotated `vX.Y.Z` tag signed by an allowed signer;
 - matches a public package version;
 - points to the checkout and the GitHub release-event commit; and
 - is contained in `origin/main`.
 
-Its preparation job has no OIDC permission. It installs the reviewed npm
+The checkout then uses the immutable release-event commit rather than the tag
+name. The preparation job has no OIDC permission. It installs the reviewed npm
 `11.18.0` release and the pinned pnpm without dependency caching, runs the
-full gate, builds and packs once with that npm CLI, smoke-tests the tarballs
-from a clean consumer, records SHA-1 and SHA-512 integrity, and uploads
-the exact prepared artifacts. The lockfile source of truth is `pnpm-lock.yaml`.
+full gate, builds and packs once with that npm CLI, revalidates each packed
+manifest, records SHA-1, SHA-256, and SHA-512 integrity, seals the exact
+release-directory inventory, and uploads the prepared artifacts. The lockfile
+source of truth is `pnpm-lock.yaml`.
 
-Only the `npm-publish` job receives `id-token: write`. It installs no
-dependencies and does not download pnpm. It runs
-`node scripts/release-packages.mjs publish`, verifies the prepared manifest
-and tarball hashes against the release commit, and publishes those tarballs
-with npm provenance.
+A separate unprivileged job downloads that artifact and installs every
+tarball into a clean consumer before importing every public export. Only the
+`npm-publish` job receives `id-token: write`. That job authenticates the tag
+again, checks out no repository content, installs no project dependencies,
+and does not download pnpm. Workflow-owned code verifies the prepared
+manifest digest, exact file inventory, and tarball hashes, then publishes from
+an isolated temporary directory with npm provenance.
 
 ## Safe retry
 

@@ -22,9 +22,14 @@ export interface FlagsHealthCheckOptions {
   readonly timeoutMs?: number;
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  controller: AbortController,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
+      controller.abort();
       reject(new ProbeTimeoutError(`timed out after ${timeoutMs}ms`));
     }, timeoutMs);
     promise.then(
@@ -54,6 +59,7 @@ export function createFlagsHealthCheck(
     name,
     async run() {
       const started = Date.now();
+      const controller = new AbortController();
       try {
         const resolution = await withTimeout(
           options.provider.resolve({
@@ -61,8 +67,10 @@ export function createFlagsHealthCheck(
             defaultValue: false,
             kind: "boolean",
             context: { targetingKey: "health" },
+            signal: controller.signal,
           }),
           timeoutMs,
+          controller,
         );
         return {
           status: "ok",

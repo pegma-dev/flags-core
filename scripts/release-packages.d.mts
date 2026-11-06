@@ -108,9 +108,28 @@ export function decidePublication(
   registryIntegrity: string | null,
 ): "publish" | "skip";
 
+export function validatePackedManifest(
+  sourceManifest: PublicPackageManifest,
+  packedManifest: PublicPackageManifest,
+  files: readonly { readonly path: string; readonly size?: number }[],
+): void;
+
+export function verifyReleaseInventory(
+  directory: string,
+  manifest: {
+    readonly packages: readonly { readonly tarball: string }[];
+  },
+): Promise<void>;
+
 export function prepareRelease(
   options?: ReleaseCommandOptions,
 ): Promise<{ manifestPath: string; manifest: unknown }>;
+
+export function verifyPreparedManifest(manifestPath: string): Promise<unknown>;
+
+export function smokePreparedRelease(
+  options?: ReleaseCommandOptions,
+): Promise<void>;
 
 export function publishPreparedRelease(
   options?: ReleaseCommandOptions,

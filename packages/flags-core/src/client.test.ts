@@ -101,6 +101,45 @@ describe("createFlagsClient", () => {
     ).rejects.toThrow("targetingKey");
   });
 
+  it("requires a schema entry to be an own property", async () => {
+    const inherited = {
+      inherited: flag.boolean({ defaultValue: false }),
+    };
+    const inheritedSchema = Object.create(inherited) as typeof schema;
+    Object.assign(inheritedSchema, schema);
+    const { logger } = memoryLogger();
+    const client = createFlagsClient({
+      schema: inheritedSchema,
+      logger,
+      provider: staticProvider({ inherited: true }),
+    });
+    await expect(
+      client.evaluate("inherited" as keyof typeof schema, {
+        targetingKey: "user-1",
+      }),
+    ).rejects.toThrow("unknown flag");
+  });
+
+  it("validates the cache entry limit", () => {
+    const { logger } = memoryLogger();
+    expect(() =>
+      createFlagsClient({
+        schema,
+        logger,
+        provider: staticProvider({}),
+        maxCacheEntries: -1,
+      }),
+    ).toThrow("non-negative integer");
+    expect(() =>
+      createFlagsClient({
+        schema,
+        logger,
+        provider: staticProvider({}),
+        maxCacheEntries: 1.5,
+      }),
+    ).toThrow("non-negative integer");
+  });
+
   it("returns a fresh cache hit with the original reason", async () => {
     let resolves = 0;
     const { logger } = memoryLogger();
@@ -355,6 +394,356 @@ describe("createFlagsClient", () => {
       environment: "",
     });
     expect(omitted).not.toBe(empty);
+  });
+
+  it("covers every context field and canonicalizes attributes", () => {
+    const base = {
+      targetingKey: "user-1",
+      principalId: "principal-1" as NonNullable<
+        EvaluationContext["principalId"]
+      >,
+      tenant: "tenant-1",
+      environment: "production",
+      attributes: { beta: 2, alpha: "one" },
+    } satisfies EvaluationContext;
+    const reordered = {
+      ...base,
+      attributes: { alpha: "one", beta: 2 },
+    } satisfies EvaluationContext;
+    expect(cacheIdentity("theme", base)).toBe(
+      cacheIdentity("theme", reordered),
+    );
+    expect(cacheIdentity("other", base)).not.toBe(cacheIdentity("theme", base));
+    const { principalId: _principalId, ...withoutPrincipal } = base;
+    expect(cacheIdentity("theme", withoutPrincipal)).not.toBe(
+      cacheIdentity("theme", base),
+    );
+    expect(cacheIdentity("theme", { ...base, tenant: "other" })).not.toBe(
+      cacheIdentity("theme", base),
+    );
+    expect(
+      cacheIdentity("theme", { ...base, environment: "staging" }),
+    ).not.toBe(cacheIdentity("theme", base));
+    expect(
+      cacheIdentity("theme", { ...base, attributes: { alpha: "one" } }),
+    ).not.toBe(cacheIdentity("theme", base));
+  });
+
+  it("skips caching oversized identities", async () => {
+    let resolves = 0;
+    const { logger } = memoryLogger();
+    const provider: FlagProvider = {
+      name: "counting",
+      capabilities() {
+        return { static: true, streaming: false, targeting: true };
+      },
+      async resolve() {
+        resolves += 1;
+        return { value: "dark", reason: "TARGETING_MATCH" };
+      },
+    };
+    const context = {
+      targetingKey: "user-1",
+      attributes: { note: "x".repeat(9_000) },
+    } satisfies EvaluationContext;
+    expect(cacheIdentity("theme", context)).toBeUndefined();
+    const client = createFlagsClient({ schema, logger, provider });
+    await client.evaluate("theme", context);
+    await client.evaluate("theme", context);
+    expect(resolves).toBe(2);
+  });
+
+  it("does not partially encode non-standard attributes", () => {
+    const nonEnumerable: Record<string, string> = {};
+    Object.defineProperty(nonEnumerable, "hidden", {
+      value: "one",
+      enumerable: false,
+    });
+    expect(
+      cacheIdentity("theme", {
+        targetingKey: "user-1",
+        attributes: nonEnumerable,
+      }),
+    ).not.toBe(
+      cacheIdentity("theme", {
+        targetingKey: "user-1",
+        attributes: {},
+      }),
+    );
+
+    const sparse: unknown[] = [];
+    sparse[1] = "one";
+    expect(
+      cacheIdentity("theme", {
+        targetingKey: "user-1",
+        attributes: {
+          sparse,
+        } as NonNullable<EvaluationContext["attributes"]>,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("skips caching oversized values", async () => {
+    let resolves = 0;
+    const { logger } = memoryLogger();
+    const client = createFlagsClient({
+      schema,
+      logger,
+      provider: {
+        name: "large-value",
+        capabilities() {
+          return { static: true, streaming: false, targeting: false };
+        },
+        async resolve() {
+          resolves += 1;
+          return { value: "x".repeat(70_000), reason: "TARGETING_MATCH" };
+        },
+      },
+    });
+    await client.evaluate("theme", { targetingKey: "user-1" });
+    await client.evaluate("theme", { targetingKey: "user-1" });
+    expect(resolves).toBe(2);
+  });
+
+  it("evicts the least recently used cache entry", async () => {
+    let resolves = 0;
+    const { logger } = memoryLogger();
+    const client = createFlagsClient({
+      schema,
+      logger,
+      maxCacheEntries: 2,
+      cacheTtlMs: 60_000,
+      provider: {
+        name: "context-value",
+        capabilities() {
+          return { static: true, streaming: false, targeting: true };
+        },
+        async resolve(request) {
+          resolves += 1;
+          return {
+            value: request.context.targetingKey,
+            reason: "TARGETING_MATCH",
+          };
+        },
+      },
+    });
+    await client.evaluate("theme", { targetingKey: "user-1" });
+    await client.evaluate("theme", { targetingKey: "user-2" });
+    await client.evaluate("theme", { targetingKey: "user-1" });
+    await client.evaluate("theme", { targetingKey: "user-3" });
+    await client.evaluate("theme", { targetingKey: "user-2" });
+    expect(resolves).toBe(4);
+  });
+
+  it("treats a zero cache entry limit as disabled", async () => {
+    let resolves = 0;
+    const { logger } = memoryLogger();
+    const client = createFlagsClient({
+      schema,
+      logger,
+      maxCacheEntries: 0,
+      provider: {
+        name: "counting",
+        capabilities() {
+          return { static: true, streaming: false, targeting: false };
+        },
+        async resolve() {
+          resolves += 1;
+          return { value: true, reason: "TARGETING_MATCH" };
+        },
+      },
+    });
+    await client.evaluate("checkoutEnabled", { targetingKey: "user-1" });
+    await client.evaluate("checkoutEnabled", { targetingKey: "user-1" });
+    expect(resolves).toBe(2);
+  });
+
+  it("coalesces concurrent cache misses", async () => {
+    let resolves = 0;
+    let complete: ((resolution: FlagResolution) => void) | undefined;
+    const pending = new Promise<FlagResolution>((resolve) => {
+      complete = resolve;
+    });
+    const { logger } = memoryLogger();
+    const client = createFlagsClient({
+      schema,
+      logger,
+      provider: {
+        name: "deferred",
+        capabilities() {
+          return { static: true, streaming: false, targeting: false };
+        },
+        resolve() {
+          resolves += 1;
+          return pending;
+        },
+      },
+    });
+    const first = client.evaluate("checkoutEnabled", {
+      targetingKey: "user-1",
+    });
+    const second = client.evaluate("checkoutEnabled", {
+      targetingKey: "user-1",
+    });
+    await Promise.resolve();
+    complete?.({ value: true, reason: "TARGETING_MATCH" });
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ value: true }),
+      expect.objectContaining({ value: true }),
+    ]);
+    expect(resolves).toBe(1);
+  });
+
+  it("aborts timed out work and keeps it coalesced until settlement", async () => {
+    let resolves = 0;
+    let signal: AbortSignal | undefined;
+    let complete: ((resolution: FlagResolution) => void) | undefined;
+    const pending = new Promise<FlagResolution>((resolve) => {
+      complete = resolve;
+    });
+    const { logger } = memoryLogger();
+    const client = createFlagsClient({
+      schema,
+      logger,
+      timeoutMs: 10,
+      provider: {
+        name: "deferred",
+        capabilities() {
+          return { static: true, streaming: false, targeting: false };
+        },
+        resolve(request) {
+          resolves += 1;
+          signal = request.signal;
+          return pending;
+        },
+      },
+    });
+    await expect(
+      client.evaluate("checkoutEnabled", { targetingKey: "user-1" }),
+    ).resolves.toMatchObject({ reason: "ERROR", errorCode: "TIMEOUT" });
+    expect(signal?.aborted).toBe(true);
+    await expect(
+      client.evaluate("checkoutEnabled", { targetingKey: "user-1" }),
+    ).resolves.toMatchObject({ reason: "ERROR", errorCode: "TIMEOUT" });
+    expect(resolves).toBe(1);
+    complete?.({ value: true, reason: "TARGETING_MATCH" });
+    await Promise.resolve();
+  });
+
+  it("does not report a close-initiated provider error as a timeout", async () => {
+    const { logger } = memoryLogger();
+    const client = createFlagsClient({
+      schema,
+      logger,
+      provider: {
+        name: "close-aware",
+        capabilities() {
+          return { static: true, streaming: false, targeting: false };
+        },
+        resolve(request) {
+          return new Promise<FlagResolution>((_resolve, reject) => {
+            request.signal?.addEventListener(
+              "abort",
+              () => {
+                reject(new Error("provider closed"));
+              },
+              { once: true },
+            );
+          });
+        },
+      },
+    });
+    const evaluation = client.evaluate("checkoutEnabled", {
+      targetingKey: "user-1",
+    });
+    await Promise.resolve();
+    await client.close();
+    await expect(evaluation).resolves.toMatchObject({
+      reason: "ERROR",
+      errorCode: "PROVIDER",
+      errorMessage: "provider closed",
+    });
+  });
+
+  it("bounds unresolved provider calls", async () => {
+    let resolves = 0;
+    const { logger } = memoryLogger();
+    const client = createFlagsClient({
+      schema,
+      logger,
+      timeoutMs: 5,
+      provider: {
+        name: "pending",
+        capabilities() {
+          return { static: true, streaming: false, targeting: true };
+        },
+        resolve() {
+          resolves += 1;
+          return new Promise(() => {
+            // Remains pending for this check.
+          });
+        },
+      },
+    });
+    const results = await Promise.all(
+      Array.from({ length: 129 }, (_, index) =>
+        client.evaluate("checkoutEnabled", {
+          targetingKey: `user-${String(index)}`,
+        }),
+      ),
+    );
+    expect(resolves).toBe(128);
+    expect(
+      results.filter(({ errorCode }) => errorCode === "CAPACITY"),
+    ).toHaveLength(1);
+    expect(
+      results.filter(({ errorCode }) => errorCode === "TIMEOUT"),
+    ).toHaveLength(128);
+    await client.close();
+  });
+
+  it("omits targeting keys from client log fields", async () => {
+    let current = "2026-08-15T12:00:00.000Z";
+    let resolves = 0;
+    const { logger, events } = memoryLogger();
+    const client = createFlagsClient({
+      schema,
+      logger,
+      clock: { now: () => current },
+      cacheTtlMs: 1,
+      staleWhileRevalidateMs: 60_000,
+      provider: {
+        name: "then-fail",
+        capabilities() {
+          return { static: true, streaming: false, targeting: false };
+        },
+        async resolve() {
+          resolves += 1;
+          if (resolves === 1) {
+            return { value: "dark", reason: "DEFAULT_FALLBACK" };
+          }
+          throw new Error("provider unavailable");
+        },
+      },
+    });
+    await client.evaluate("theme", { targetingKey: "private-key" });
+    current = "2026-08-15T12:00:01.000Z";
+    await client.evaluate("theme", { targetingKey: "private-key" });
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(events).not.toHaveLength(0);
+    expect(events.map(({ message }) => message)).toEqual(
+      expect.arrayContaining([
+        "flags.fallback",
+        "flags.stale_cache",
+        "flags.refresh_failed",
+      ]),
+    );
+    for (const event of events) {
+      expect(event.fields).not.toHaveProperty("targetingKey");
+      expect(JSON.stringify(event.fields)).not.toContain("private-key");
+    }
   });
 
   it("sanitizes provider errorMessage on a successful resolution", async () => {

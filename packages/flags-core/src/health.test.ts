@@ -27,12 +27,14 @@ describe("createFlagsHealthCheck", () => {
   });
 
   it("reports fail on timeout without leaking error text", async () => {
+    let signal: AbortSignal | undefined;
     const hanging: FlagProvider = {
       name: "hanging",
       capabilities() {
         return { static: true, streaming: false, targeting: false };
       },
-      resolve() {
+      resolve(request) {
+        signal = request.signal;
         return new Promise(() => {
           // never settles
         });
@@ -47,6 +49,7 @@ describe("createFlagsHealthCheck", () => {
       provider: "hanging",
       reason: "probe_timeout",
     });
+    expect(signal?.aborted).toBe(true);
     expect(JSON.stringify(result)).not.toContain("timed out");
   });
 });

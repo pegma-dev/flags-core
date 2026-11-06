@@ -1,5 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -12,8 +19,12 @@ import {
   parseNpmJson,
   parsePnpmImporterDependencies,
   resolvedVersionSatisfies,
+  smokePreparedRelease,
+  validatePackedManifest,
   validateReleaseTag,
   validateRepository,
+  verifyPreparedManifest,
+  verifyReleaseInventory,
 } from "../scripts/release-packages.mjs";
 
 const git = process.platform === "win32" ? "git.exe" : "git";
@@ -34,11 +45,91 @@ function run(command: string, arguments_: string[], cwd?: string): string {
   }).trim();
 }
 
+function createPreparedRelease(directory: string): {
+  manifestPath: string;
+  manifest: {
+    schemaVersion: number;
+    gitCommit: string;
+    releaseTag: string;
+    packages: Array<{
+      name: string;
+      version: string;
+      directory: string;
+      tarball: string;
+      sha256: string;
+      shasum: string;
+      integrity: string;
+      publish: boolean;
+      files: Array<{ path: string; size: number }>;
+    }>;
+  };
+} {
+  const stagingRoot = join(directory, "staging");
+  mkdirSync(stagingRoot);
+  const records = RELEASE_PACKAGES.map((definition) => {
+    const packageStaging = join(stagingRoot, definition.directory);
+    const packageRoot = join(packageStaging, "package");
+    mkdirSync(join(packageRoot, "dist"), { recursive: true });
+    writeFileSync(
+      join(packageRoot, "package.json"),
+      `${JSON.stringify({
+        name: definition.name,
+        version: packageVersion,
+        type: "module",
+        exports: { ".": "./dist/index.js" },
+      })}\n`,
+    );
+    writeFileSync(
+      join(packageRoot, "dist", "index.js"),
+      "export const ready = true;\n",
+    );
+    const tarball = `${definition.name
+      .slice(1)
+      .replace("/", "-")}-${packageVersion}.tgz`;
+    const tarballPath = join(directory, tarball);
+    run("tar", ["-czf", tarballPath, "-C", packageStaging, "package"]);
+    const bytes = readFileSync(tarballPath);
+    return {
+      name: definition.name,
+      version: packageVersion,
+      directory: definition.directory,
+      tarball,
+      sha256: createHash("sha256").update(bytes).digest("hex"),
+      shasum: createHash("sha1").update(bytes).digest("hex"),
+      integrity: `sha512-${createHash("sha512").update(bytes).digest("base64")}`,
+      publish: true,
+      files: [
+        { path: "package.json", size: 1 },
+        { path: "dist/index.js", size: 1 },
+      ],
+    };
+  });
+  rmSync(stagingRoot, { recursive: true, force: true });
+  const manifest = {
+    schemaVersion: 1,
+    gitCommit: run(git, ["rev-parse", "HEAD"], process.cwd()),
+    releaseTag: `v${packageVersion}`,
+    packages: records,
+  };
+  const manifestPath = join(directory, "package-manifest.json");
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return { manifestPath, manifest };
+}
+
 describe("release package metadata", () => {
   it("accepts npm's cross-platform argument separator", () => {
     expect(parseArguments(["--", "--output", ".release"])).toEqual({
       output: ".release",
     });
+  });
+
+  it("exposes the release smoke command", () => {
+    const rootManifest = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8"),
+    ) as { scripts?: Record<string, string> };
+    expect(rootManifest.scripts?.["release:smoke"]).toBe(
+      "node scripts/release-packages.mjs smoke",
+    );
   });
 
   it("keeps the exact public package inventory", () => {
@@ -199,6 +290,113 @@ describe("release package metadata", () => {
       }),
     ).rejects.toThrow("prereleases cannot publish packages");
   });
+
+  it("revalidates the manifest stored in a tarball", () => {
+    const source = {
+      name: "@pegma/example",
+      version: "0.1.1",
+      exports: { ".": "./dist/index.js" },
+      dependencies: { "@pegma/spine": "0.1.2" },
+    };
+    const files = [
+      { path: "package.json" },
+      { path: "README.md" },
+      { path: "LICENSE" },
+      { path: "dist/index.js" },
+    ];
+    const packed = {
+      ...source,
+      scripts: { prepack: "pnpm build" },
+      dependencies: { "@pegma/spine": "0.1.2" },
+    };
+    expect(() => validatePackedManifest(source, packed, files)).not.toThrow();
+    expect(() =>
+      validatePackedManifest(
+        source,
+        { ...packed, scripts: { install: "node setup.mjs" } },
+        files,
+      ),
+    ).toThrow("must not define install");
+    expect(() =>
+      validatePackedManifest(
+        source,
+        { ...packed, dependencies: { "@pegma/spine": "^0.1.2" } },
+        files,
+      ),
+    ).toThrow("preserve the exact @pegma/spine pin");
+    expect(() =>
+      validatePackedManifest(
+        source,
+        { ...packed, dependencies: { "@pegma/spine": "0.1.1" } },
+        files,
+      ),
+    ).toThrow("preserve the exact @pegma/spine pin");
+    expect(() =>
+      validatePackedManifest(
+        source,
+        packed,
+        files.filter(({ path }) => path !== "README.md"),
+      ),
+    ).toThrow("missing README.md");
+  });
+
+  it("accepts only the sealed release directory inventory", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "flags-core-inventory-"));
+    const manifest = { packages: [{ tarball: "pegma-example-0.1.1.tgz" }] };
+    try {
+      writeFileSync(join(directory, "package-manifest.json"), "{}\n");
+      writeFileSync(join(directory, "pegma-example-0.1.1.tgz"), "tarball");
+      await expect(
+        verifyReleaseInventory(directory, manifest),
+      ).resolves.toBeUndefined();
+
+      rmSync(join(directory, "pegma-example-0.1.1.tgz"));
+      await expect(verifyReleaseInventory(directory, manifest)).rejects.toThrow(
+        "missing pegma-example-0.1.1.tgz",
+      );
+      writeFileSync(join(directory, "pegma-example-0.1.1.tgz"), "tarball");
+
+      writeFileSync(join(directory, ".npmrc"), "registry=example\n");
+      await expect(verifyReleaseInventory(directory, manifest)).rejects.toThrow(
+        "inventory",
+      );
+      rmSync(join(directory, ".npmrc"));
+
+      mkdirSync(join(directory, "extra"));
+      await expect(verifyReleaseInventory(directory, manifest)).rejects.toThrow(
+        "inventory",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("verifies prepared SHA-256 records", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "flags-core-prepared-"));
+    try {
+      const { manifestPath, manifest } = createPreparedRelease(directory);
+      await expect(verifyPreparedManifest(manifestPath)).resolves.toBeDefined();
+      manifest.packages[0]!.sha256 = "0".repeat(64);
+      writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+      await expect(verifyPreparedManifest(manifestPath)).rejects.toThrow(
+        "prepared tarball has changed",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("installs and imports a prepared release", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "flags-core-smoke-"));
+    try {
+      const { manifestPath } = createPreparedRelease(directory);
+      await expect(
+        smokePreparedRelease({ manifest: manifestPath }),
+      ).resolves.toBeUndefined();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("release source authentication", () => {
@@ -290,25 +488,75 @@ describe("release source authentication", () => {
     const header = workflow.slice(0, jobsIndex);
     const jobs = workflow.slice(jobsIndex + jobsMarker.length);
     const prepareStart = jobs.indexOf("  prepare:");
+    const smokeStart = jobs.indexOf("\n  smoke:");
     const publishStart = jobs.indexOf("\n  publish:");
     expect(header).not.toContain("id-token: write");
     expect(prepareStart).toBeGreaterThanOrEqual(0);
+    expect(smokeStart).toBeGreaterThan(prepareStart);
     expect(publishStart).toBeGreaterThan(prepareStart);
-    const prepare = jobs.slice(prepareStart, publishStart);
+    const prepare = jobs.slice(prepareStart, smokeStart);
+    const smoke = jobs.slice(smokeStart, publishStart);
     const publish = jobs.slice(publishStart);
     expect(prepare).not.toContain("id-token: write");
-    expect(prepare).toContain("npm install --global npm@11.18.0");
+    expect(prepare).toContain(
+      "npm install --global npm@11.18.0 --ignore-scripts",
+    );
     expect(prepare).toContain("node scripts/release-packages.mjs pack");
+    expect(prepare.indexOf("Authenticate the release source")).toBeLessThan(
+      prepare.indexOf("actions/checkout"),
+    );
+    expect(prepare).toContain("ref: ${{ github.sha }}");
+    expect(prepare).toContain("persist-credentials: false");
+    expect(prepare).toContain("include-hidden-files: false");
+    expect(prepare).toContain("manifest_digest:");
+    expect(smoke).toContain("permissions:\n      contents: read");
+    expect(smoke).not.toContain("id-token: write");
+    expect(smoke).toContain("node scripts/release-packages.mjs smoke");
     expect(publish).toContain("id-token: write");
     expect(publish).not.toContain("npm ci");
-    expect(publish).not.toContain("npm install");
     expect(publish).not.toContain("pnpm install");
     expect(publish).not.toContain("corepack");
     expect(publish).not.toContain("pnpm run");
     expect(publish).not.toContain("pnpm/action-setup");
-    expect(publish).toContain("node scripts/release-packages.mjs publish");
+    expect(publish).not.toContain("actions/checkout");
+    expect(publish).not.toContain("scripts/release-packages.mjs");
+    expect(publish).toContain("npm install --global npm@11.18.0");
+    expect(publish).toContain("node <<'NODE'");
+    expect(publish).toContain("EXPECTED_MANIFEST_DIGEST");
+    expect(publish).toContain("ACTIONS_ID_TOKEN_");
+    expect(publish).toContain('key !== "GITHUB_TOKEN"');
+    expect(publish).toContain('npmVersion !== "11.18.0"');
+    expect(publish).toContain('"--provenance"');
+    expect(publish).toContain('"--ignore-scripts"');
+    expect(publish).toContain("needs: [prepare, smoke]");
     expect(workflow).not.toContain("workflow_dispatch");
     expect(workflow).toContain("retention-days: 30");
+
+    const jobEnvironmentBlocks = [
+      ...workflow.matchAll(/^    env:\r?\n((?: {6}.*(?:\r?\n|$))*)/gmu),
+    ];
+    for (const block of jobEnvironmentBlocks) {
+      expect(block[1]).not.toContain("${{ runner.");
+      expect(block[1]).not.toContain("${{ steps.");
+    }
+
+    const inlineStart = workflow.indexOf("          node <<'NODE'\n");
+    const inlineEnd = workflow.indexOf("\n          NODE", inlineStart);
+    expect(inlineStart).toBeGreaterThanOrEqual(0);
+    expect(inlineEnd).toBeGreaterThan(inlineStart);
+    const inlineScript = workflow
+      .slice(inlineStart + "          node <<'NODE'\n".length, inlineEnd)
+      .replace(/^ {10}/gmu, "");
+    const directory = mkdtempSync(join(tmpdir(), "flags-core-inline-"));
+    try {
+      const scriptPath = join(directory, "publish.cjs");
+      writeFileSync(scriptPath, inlineScript);
+      expect(() =>
+        run(process.execPath, ["--check", scriptPath]),
+      ).not.toThrow();
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
 
